@@ -79,14 +79,14 @@ export default function App() {
     try {
       const res = await fetch('/api/user/credits');
       if (!res.ok) {
-        const text = await res.text();
-        console.error('Credits fetch failed:', text);
-        return;
+        throw new Error('API unavailable');
       }
       const data = await res.json();
       setCredits(data.credits);
     } catch (error) {
-      console.error('Failed to fetch credits', error);
+      console.error('Failed to fetch credits, using demo mode:', error);
+      // Fallback for static environments/Vercel where the Express backend isn't running
+      setCredits(10); 
     }
   };
 
@@ -94,14 +94,22 @@ export default function App() {
     try {
       const res = await fetch('/api/pricing');
       if (!res.ok) {
-        const text = await res.text();
-        console.error('Pricing fetch failed:', text);
-        return;
+        throw new Error('API unavailable');
       }
       const data = await res.json();
       setPricing(data);
     } catch (error) {
-      console.error('Failed to fetch pricing', error);
+      console.error('Failed to fetch pricing, using demo mode:', error);
+      // Fallback for static environments
+      setPricing({
+        currency: "ZAR",
+        costPerConversion: 1,
+        tiers: [
+          { id: "starter", name: "Starter", credits: 10, price: 50.00, description: "Perfect for occasional conversions" },
+          { id: "pro", name: "Professional", credits: 50, price: 200.00, description: "Best for power users", popular: true },
+          { id: "enterprise", name: "Enterprise", credits: 250, price: 750.00, description: "For businesses" }
+        ]
+      });
     }
   };
 
@@ -178,12 +186,13 @@ export default function App() {
     try {
       // Deduct credit first
       const deductRes = await fetch('/api/user/deduct', { method: 'POST' });
-      if (!deductRes.ok) {
-        const errorData = await deductRes.json().catch(() => ({ error: 'Failed to deduct credit' }));
-        throw new Error(errorData.error || 'Failed to deduct credit');
+      if (deductRes.ok) {
+        const deductData = await deductRes.json();
+        setCredits(deductData.credits);
+      } else {
+        console.warn('Deduction API unavailable, proceeding in demo mode');
+        setCredits(prev => prev !== null ? prev - 1 : null);
       }
-      const deductData = await deductRes.json();
-      setCredits(deductData.credits);
 
       let urls: string[] = [];
       
@@ -256,8 +265,7 @@ export default function App() {
       });
       
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Checkout failed' }));
-        throw new Error(errorData.error || 'Checkout failed');
+        throw new Error('Checkout API unavailable');
       }
 
       const { url, data } = await res.json();
@@ -278,8 +286,9 @@ export default function App() {
       document.body.appendChild(form);
       form.submit();
     } catch (error) {
-      console.error('Purchase failed', error);
-      toast.error('Failed to initiate purchase. Please try again.');
+      console.error('Purchase failed:', error);
+      toast.info('Payment integration requires a live backend. In this demo, you can continue testing with your existing credits!');
+      setShowPricing(false);
     }
   };
 
@@ -296,13 +305,14 @@ export default function App() {
             </div>
             <span className="font-bold text-xl tracking-tight">Q-bit</span>
           </div>
-          <div className="flex items-center gap-4">
-            {credits !== null && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-full text-amber-700 text-sm font-semibold">
-                <Coins className="w-4 h-4" />
-                {credits} Credits
-              </div>
-            )}
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all",
+              credits === null ? "bg-slate-100 text-slate-400 animate-pulse" : "bg-amber-50 border border-amber-100 text-amber-700"
+            )}>
+              <Coins className="w-4 h-4" />
+              {credits !== null ? `${credits} Credits` : 'Loading...'}
+            </div>
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-500">
               <button onClick={() => setShowPricing(true)} className="hover:text-primary transition-colors">Pricing</button>
               <a href="#" className="hover:text-primary transition-colors">Privacy</a>
