@@ -33,11 +33,12 @@ import {
   convertPdfToText, 
   convertPdfToImages, 
   convertTextToImage,
+  convertTextToPdf,
   convertWordToText 
 } from '@/lib/converter';
 
 type FileType = 'pdf' | 'text' | 'word' | 'unknown';
-type OutputFormat = 'text' | 'jpeg';
+type OutputFormat = 'text' | 'jpeg' | 'pdf';
 
 interface FileState {
   file: File;
@@ -151,6 +152,7 @@ export default function App() {
     
     // Set default output based on input
     if (type === 'text') setOutputFormat('jpeg');
+    else if (type === 'word') setOutputFormat('pdf');
     else setOutputFormat('text');
   };
 
@@ -201,21 +203,32 @@ export default function App() {
           const text = await convertPdfToText(fileState.file);
           const blob = new Blob([text], { type: 'text/plain' });
           urls = [URL.createObjectURL(blob)];
-        } else {
+        } else if (outputFormat === 'jpeg') {
           const blobs = await convertPdfToImages(fileState.file);
           urls = blobs.map(blob => URL.createObjectURL(blob));
+        } else {
+          // PDF to PDF (pass-through)
+          urls = [URL.createObjectURL(fileState.file)];
         }
       } else if (fileState.type === 'text') {
         const text = await fileState.file.text();
-        const blob = await convertTextToImage(text, fileState.file.name);
-        urls = [URL.createObjectURL(blob)];
+        if (outputFormat === 'jpeg') {
+          const blob = await convertTextToImage(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'pdf') {
+          const blob = await convertTextToPdf(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        }
       } else if (fileState.type === 'word') {
         const text = await convertWordToText(fileState.file);
         if (outputFormat === 'text') {
           const blob = new Blob([text], { type: 'text/plain' });
           urls = [URL.createObjectURL(blob)];
-        } else {
+        } else if (outputFormat === 'jpeg') {
           const blob = await convertTextToImage(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'pdf') {
+          const blob = await convertTextToPdf(text, fileState.file.name);
           urls = [URL.createObjectURL(blob)];
         }
       }
@@ -244,7 +257,10 @@ export default function App() {
   const downloadResult = (url: string, index: number) => {
     const a = document.createElement('a');
     a.href = url;
-    const extension = result?.type === 'text' ? 'txt' : 'jpg';
+    let extension = 'txt';
+    if (result?.type === 'jpeg') extension = 'jpg';
+    else if (result?.type === 'pdf') extension = 'pdf';
+    
     const originalName = fileState?.file.name.split('.')[0] || 'converted';
     a.download = `${originalName}_${index + 1}.${extension}`;
     document.body.appendChild(a);
@@ -317,9 +333,6 @@ export default function App() {
               <Coins className="w-4 h-4" />
               {credits !== null ? `${credits} Credits` : 'Loading...'}
             </div>
-            <Button variant="outline" size="sm" className="rounded-full hidden md:flex">
-              Github
-            </Button>
           </div>
         </div>
       </header>
@@ -332,7 +345,7 @@ export default function App() {
             className="w-24 h-24 mx-auto mb-8 rounded-3xl overflow-hidden border-4 border-white shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500"
           >
             <img 
-              src="https://picsum.photos/seed/converter/200/200" 
+              src="https://storage.googleapis.com/m-ai-studio-public-assets/universal-document-converter-logo.png" 
               alt="Universal Converter" 
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
@@ -428,7 +441,10 @@ export default function App() {
                       onValueChange={(v) => setOutputFormat(v as OutputFormat)}
                       className="w-full"
                     >
-                      <TabsList className="grid grid-cols-2 w-full bg-slate-100 p-1 rounded-xl">
+                      <TabsList className={cn(
+                        "grid w-full bg-slate-100 p-1 rounded-xl",
+                        fileState.type === 'text' ? "grid-cols-2" : "grid-cols-3"
+                      )}>
                         <TabsTrigger 
                           value="text" 
                           disabled={fileState.type === 'text'}
@@ -443,6 +459,13 @@ export default function App() {
                         >
                           <FileImage className="w-4 h-4 mr-2" />
                           JPEG
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="pdf"
+                          className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          PDF
                         </TabsTrigger>
                       </TabsList>
                     </Tabs>

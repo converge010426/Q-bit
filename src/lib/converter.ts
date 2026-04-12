@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 // Use the browser-ready version of mammoth
 import mammoth from 'mammoth/mammoth.browser';
+import { jsPDF } from 'jspdf';
 
 // Set worker path - using a CDN that matches the version
 // Note: In a production app, you might want to bundle the worker or use a more robust loading method.
@@ -114,6 +115,28 @@ export async function convertTextToImage(text: string, fileName: string): Promis
       else reject(new Error('Canvas to Blob failed'));
     }, 'image/jpeg', 0.9);
   });
+}
+
+export async function convertTextToPdf(text: string, fileName: string): Promise<Blob> {
+  const doc = new jsPDF();
+  const margin = 10;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxLineWidth = pageWidth - margin * 2;
+  
+  const lines = doc.splitTextToSize(text, maxLineWidth);
+  let cursorY = margin;
+  
+  lines.forEach((line: string) => {
+    if (cursorY + 10 > pageHeight - margin) {
+      doc.addPage();
+      cursorY = margin;
+    }
+    doc.text(line, margin, cursorY);
+    cursorY += 7;
+  });
+  
+  return new Blob([doc.output('blob')], { type: 'application/pdf' });
 }
 
 export async function convertWordToText(file: File): Promise<string> {
