@@ -1,0 +1,5 @@
+{
+  "name": "DocuShift",
+  "description": "Convert documents between Text and PDF to Text or JPEG formats instantly in your browser.",
+  "requestFramePermissions": []
+}
