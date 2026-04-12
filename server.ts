@@ -58,8 +58,15 @@ async function startServer() {
   });
 
   app.get("/api/user/credits", (req, res) => {
-    const user = db.prepare("SELECT credits FROM users WHERE email = ?").get(DEFAULT_USER_EMAIL) as { credits: number } | undefined;
-    res.json({ credits: user?.credits || 0, email: DEFAULT_USER_EMAIL });
+    let user = db.prepare("SELECT credits FROM users WHERE email = ?").get(DEFAULT_USER_EMAIL) as { credits: number } | undefined;
+    
+    if (!user) {
+      // Auto-create user if they don't exist
+      db.prepare("INSERT INTO users (email, credits) VALUES (?, ?)").run(DEFAULT_USER_EMAIL, 20);
+      user = { credits: 20 };
+    }
+    
+    res.json({ credits: user.credits, email: DEFAULT_USER_EMAIL });
   });
 
   app.post("/api/user/deduct", (req, res) => {
