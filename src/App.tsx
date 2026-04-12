@@ -15,7 +15,10 @@ import {
   ArrowRight,
   FileUp,
   Settings2,
-  Zap
+  Zap,
+  Coins,
+  ShoppingCart,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -48,7 +51,49 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('text');
   const [result, setResult] = useState<{ urls: string[], type: OutputFormat } | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<any>(null);
+  const [showPricing, setShowPricing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch user credits and pricing on mount
+  React.useEffect(() => {
+    fetchCredits();
+    fetchPricing();
+
+    // Check for payment status in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      toast.success('Payment successful! Your credits will be updated shortly.');
+      // Remove params from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh credits after a short delay to allow ITN to process
+      setTimeout(fetchCredits, 2000);
+    } else if (params.get('payment') === 'cancel') {
+      toast.error('Payment cancelled.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  const fetchCredits = async () => {
+    try {
+      const res = await fetch('/api/user/credits');
+      const data = await res.json();
+      setCredits(data.credits);
+    } catch (error) {
+      console.error('Failed to fetch credits', error);
+    }
+  };
+
+  const fetchPricing = async () => {
+    try {
+      const res = await fetch('/api/pricing');
+      const data = await res.json();
+      setPricing(data);
+    } catch (error) {
+      console.error('Failed to fetch pricing', error);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,10 +151,25 @@ export default function App() {
   const startConversion = async () => {
     if (!fileState) return;
     
+    if (credits !== null && credits <= 0) {
+      toast.error('You have run out of credits. Please purchase more to continue.');
+      setShowPricing(true);
+      return;
+    }
+
     setIsConverting(true);
     setProgress(10);
     
     try {
+      // Deduct credit first
+      const deductRes = await fetch('/api/user/deduct', { method: 'POST' });
+      if (!deductRes.ok) {
+        const errorData = await deductRes.json();
+        throw new Error(errorData.error || 'Failed to deduct credit');
+      }
+      const deductData = await deductRes.json();
+      setCredits(deductData.credits);
+
       let urls: string[] = [];
       
       if (fileState.type === 'pdf') {
@@ -171,6 +231,37 @@ export default function App() {
     result?.urls.forEach((url, i) => downloadResult(url, i));
   };
 
+  const handlePurchase = async (tierId: string) => {
+    try {
+      const res = await fetch('/api/payfast/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tierId })
+      });
+      
+      const { url, data } = await res.json();
+      
+      // Create a form and submit it to PayFast
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      
+      Object.keys(data).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = data[key];
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      console.error('Purchase failed', error);
+      toast.error('Failed to initiate purchase. Please try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f5f5] font-sans text-slate-900 selection:bg-primary/10">
       <Toaster position="top-center" />
@@ -182,15 +273,23 @@ export default function App() {
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
               <Zap className="w-5 h-5 fill-current" />
             </div>
-            <span className="font-bold text-xl tracking-tight">DocuShift</span>
+            <span className="font-bold text-xl tracking-tight">Q-bit</span>
           </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-500">
-            <a href="#" className="hover:text-primary transition-colors">How it works</a>
-            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-            <Button variant="outline" size="sm" className="rounded-full">
-              Github
-            </Button>
-          </nav>
+          <div className="flex items-center gap-4">
+            {credits !== null && (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-100 rounded-full text-amber-700 text-sm font-semibold">
+                <Coins className="w-4 h-4" />
+                {credits} Credits
+              </div>
+            )}
+            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-500">
+              <button onClick={() => setShowPricing(true)} className="hover:text-primary transition-colors">Pricing</button>
+              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
+              <Button variant="outline" size="sm" className="rounded-full">
+                Github
+              </Button>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -367,6 +466,82 @@ export default function App() {
           )}
         </Card>
 
+        {/* Pricing Modal Overlay */}
+        <AnimatePresence>
+          {showPricing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+              onClick={() => setShowPricing(false)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-8 md:p-12">
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-3xl font-bold tracking-tight">Simple, transparent pricing</h2>
+                      <p className="text-slate-500 mt-2">Choose the plan that's right for you.</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setShowPricing(false)} className="rounded-full">
+                      <X className="w-6 h-6" />
+                    </Button>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-6">
+                    {pricing?.tiers.map((tier: any) => (
+                      <div 
+                        key={tier.id} 
+                        className={cn(
+                          "relative p-6 rounded-2xl border-2 transition-all hover:shadow-lg",
+                          tier.popular ? "border-primary bg-primary/5" : "border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        {tier.popular && (
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
+                            Most Popular
+                          </div>
+                        )}
+                        <h3 className="font-bold text-xl mb-1">{tier.name}</h3>
+                        <p className="text-slate-500 text-sm mb-4 h-10">{tier.description}</p>
+                        <div className="flex items-baseline gap-1 mb-6">
+                          <span className="text-3xl font-bold">${tier.price}</span>
+                          <span className="text-slate-400 text-sm">/ {tier.credits} credits</span>
+                        </div>
+                        <Button 
+                          className={cn("w-full rounded-xl", tier.popular ? "bg-primary" : "bg-slate-900")}
+                          onClick={() => handlePurchase(tier.id)}
+                        >
+                          Get Started
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-12 p-6 bg-slate-50 rounded-2xl flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                      <Info className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm">How credits work</h4>
+                      <p className="text-slate-500 text-sm mt-1">
+                        Each document conversion costs 1 credit. Credits never expire and can be used for any supported file format.
+                        We use {pricing?.currency} for all transactions.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Features */}
         <div className="grid md:grid-cols-3 gap-6 mt-20">
           {[
@@ -396,7 +571,7 @@ export default function App() {
       </main>
 
       <footer className="max-w-5xl mx-auto px-6 py-12 border-t mt-20 text-center text-slate-400 text-sm">
-        <p>© 2026 DocuShift. Built with privacy in mind.</p>
+        <p>© 2026 Q-bit. Built with privacy in mind.</p>
       </footer>
     </div>
   );
