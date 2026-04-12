@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import mammoth from 'mammoth';
+// Use the browser-ready version of mammoth
+import mammoth from 'mammoth/mammoth.browser';
 
 // Set worker path - using a CDN that matches the version
 // Note: In a production app, you might want to bundle the worker or use a more robust loading method.
@@ -116,7 +117,12 @@ export async function convertTextToImage(text: string, fileName: string): Promis
 }
 
 export async function convertWordToText(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  } catch (error) {
+    console.error('Mammoth conversion error:', error);
+    throw new Error('Failed to extract text from Word document. Ensure it is a valid .docx file.');
+  }
 }

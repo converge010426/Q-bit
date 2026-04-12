@@ -104,17 +104,22 @@ export default function App() {
 
   const processFile = (file: File) => {
     let type: FileType = 'unknown';
-    if (file.type === 'application/pdf') type = 'pdf';
-    else if (file.type === 'text/plain') type = 'text';
-    else if (
+    const fileName = file.name.toLowerCase();
+    if (file.type === 'application/pdf' || fileName.endsWith('.pdf')) {
+      type = 'pdf';
+    } else if (file.type === 'text/plain' || fileName.endsWith('.txt')) {
+      type = 'text';
+    } else if (
       file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
       file.type === 'application/msword' ||
-      file.name.endsWith('.docx') ||
-      file.name.endsWith('.doc')
-    ) type = 'word';
+      fileName.endsWith('.docx') ||
+      fileName.endsWith('.doc')
+    ) {
+      type = 'word';
+    }
     
     if (type === 'unknown') {
-      toast.error('Unsupported file type. Please upload a PDF, Text, or Word file.');
+      toast.error(`Unsupported file type: ${file.type || 'unknown'}. Please upload a PDF, Text, or Word file.`);
       return;
     }
 
@@ -208,9 +213,10 @@ export default function App() {
         toast.success('Conversion complete!');
       }, 500);
       
-    } catch (error) {
-      console.error(error);
-      toast.error('Conversion failed. Please try again.');
+    } catch (error: any) {
+      console.error('Conversion error:', error);
+      const message = error instanceof Error ? error.message : 'Conversion failed. Please try again.';
+      toast.error(message);
       setIsConverting(false);
       setProgress(0);
     }
