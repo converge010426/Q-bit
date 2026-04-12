@@ -316,7 +316,7 @@ export default function App() {
       <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 shadow-sm shrink-0 bg-primary/5 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-primary/20 shadow-sm shrink-0 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
               <Zap className="w-6 h-6 text-primary fill-current" />
             </div>
             <span className="font-bold text-2xl tracking-tighter text-slate-900">Q-bit</span>
@@ -342,12 +342,13 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-24 h-24 mx-auto mb-8 rounded-3xl overflow-hidden border-4 border-white shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500"
+            className="w-24 h-24 mx-auto mb-8 rounded-3xl overflow-hidden border-4 border-white shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500 bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center"
           >
+            <Zap className="w-12 h-12 text-white fill-current drop-shadow-lg" />
             <img 
-              src="https://storage.googleapis.com/m-ai-studio-public-assets/universal-document-converter-logo.png" 
-              alt="Universal Converter" 
-              className="w-full h-full object-cover"
+              src="https://picsum.photos/seed/qbit-badge/200/200" 
+              alt="Q-bit badge" 
+              className="absolute inset-0 w-full h-full object-cover opacity-20 mix-blend-overlay"
               referrerPolicy="no-referrer"
             />
           </motion.div>
