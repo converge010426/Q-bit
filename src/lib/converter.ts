@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
 
 // Set worker path - using a CDN that matches the version
 // Note: In a production app, you might want to bundle the worker or use a more robust loading method.
@@ -112,4 +113,10 @@ export async function convertTextToImage(text: string, fileName: string): Promis
       else reject(new Error('Canvas to Blob failed'));
     }, 'image/jpeg', 0.9);
   });
+}
+
+export async function convertWordToText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return result.value;
 }

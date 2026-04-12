@@ -29,10 +29,11 @@ import { cn } from '@/lib/utils';
 import { 
   convertPdfToText, 
   convertPdfToImages, 
-  convertTextToImage 
+  convertTextToImage,
+  convertWordToText 
 } from '@/lib/converter';
 
-type FileType = 'pdf' | 'text' | 'unknown';
+type FileType = 'pdf' | 'text' | 'word' | 'unknown';
 type OutputFormat = 'text' | 'jpeg';
 
 interface FileState {
@@ -60,9 +61,15 @@ export default function App() {
     let type: FileType = 'unknown';
     if (file.type === 'application/pdf') type = 'pdf';
     else if (file.type === 'text/plain') type = 'text';
+    else if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+      file.type === 'application/msword' ||
+      file.name.endsWith('.docx') ||
+      file.name.endsWith('.doc')
+    ) type = 'word';
     
     if (type === 'unknown') {
-      toast.error('Unsupported file type. Please upload a PDF or Text file.');
+      toast.error('Unsupported file type. Please upload a PDF, Text, or Word file.');
       return;
     }
 
@@ -118,6 +125,15 @@ export default function App() {
         const text = await fileState.file.text();
         const blob = await convertTextToImage(text, fileState.file.name);
         urls = [URL.createObjectURL(blob)];
+      } else if (fileState.type === 'word') {
+        const text = await convertWordToText(fileState.file);
+        if (outputFormat === 'text') {
+          const blob = new Blob([text], { type: 'text/plain' });
+          urls = [URL.createObjectURL(blob)];
+        } else {
+          const blob = await convertTextToImage(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        }
       }
 
       setProgress(100);
@@ -195,7 +211,7 @@ export default function App() {
             className="text-slate-500 text-lg max-w-xl mx-auto"
           >
             Secure, client-side conversion. Your files never leave your device.
-            Supports PDF to Text, PDF to JPEG, and Text to JPEG.
+            Supports PDF to Text, PDF to JPEG, Text to JPEG, and Word to Text/JPEG.
           </motion.p>
         </div>
 
@@ -227,13 +243,13 @@ export default function App() {
                   ref={fileInputRef} 
                   onChange={handleFileChange} 
                   className="hidden" 
-                  accept=".pdf,.txt"
+                  accept=".pdf,.txt,.doc,.docx"
                 />
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
                   <Upload className="w-8 h-8 text-slate-400 group-hover:text-primary transition-colors" />
                 </div>
                 <h3 className="font-medium text-lg mb-1">Click or drag file here</h3>
-                <p className="text-slate-400 text-sm">PDF or TXT files up to 20MB</p>
+                <p className="text-slate-400 text-sm">PDF, TXT, or Word files up to 20MB</p>
               </div>
             ) : (
               <div className="space-y-6">
