@@ -299,11 +299,16 @@ export default function App() {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
-              <Zap className="w-5 h-5 fill-current" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 shadow-sm shrink-0">
+              <img 
+                src="https://storage.googleapis.com/m-ai-studio-public-assets/universal-document-converter-logo.png" 
+                alt="Q-bit Logo" 
+                className="w-full h-full object-cover scale-110"
+                referrerPolicy="no-referrer"
+              />
             </div>
-            <span className="font-bold text-xl tracking-tight">Q-bit</span>
+            <span className="font-bold text-2xl tracking-tighter text-slate-900">Q-bit</span>
           </div>
           <div className="flex items-center gap-3">
             <div className={cn(
