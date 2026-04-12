@@ -78,6 +78,11 @@ export default function App() {
   const fetchCredits = async () => {
     try {
       const res = await fetch('/api/user/credits');
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Credits fetch failed:', text);
+        return;
+      }
       const data = await res.json();
       setCredits(data.credits);
     } catch (error) {
@@ -88,6 +93,11 @@ export default function App() {
   const fetchPricing = async () => {
     try {
       const res = await fetch('/api/pricing');
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Pricing fetch failed:', text);
+        return;
+      }
       const data = await res.json();
       setPricing(data);
     } catch (error) {
@@ -169,7 +179,7 @@ export default function App() {
       // Deduct credit first
       const deductRes = await fetch('/api/user/deduct', { method: 'POST' });
       if (!deductRes.ok) {
-        const errorData = await deductRes.json();
+        const errorData = await deductRes.json().catch(() => ({ error: 'Failed to deduct credit' }));
         throw new Error(errorData.error || 'Failed to deduct credit');
       }
       const deductData = await deductRes.json();
@@ -245,6 +255,11 @@ export default function App() {
         body: JSON.stringify({ tierId })
       });
       
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Checkout failed' }));
+        throw new Error(errorData.error || 'Checkout failed');
+      }
+
       const { url, data } = await res.json();
       
       // Create a form and submit it to PayFast

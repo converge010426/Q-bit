@@ -131,19 +131,30 @@ async function startServer() {
     res.sendStatus(200);
   });
 
+  // Catch-all for undefined API routes
+  app.all("/api/*", (req, res) => {
+    console.log(`API 404: ${req.method} ${req.url}`);
+    res.status(404).json({ error: `API route not found: ${req.url}` });
+  });
+
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const isProd = process.env.NODE_ENV === "production";
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(distPath);
+
+  if (isProd && hasDist) {
+    console.log("Serving production build from dist/");
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    console.log("Starting Vite in middleware mode...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
