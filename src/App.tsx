@@ -320,14 +320,18 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] font-sans text-slate-900 selection:bg-primary/10">
+    <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-primary/10 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
+      <div className="absolute inset-0 -z-10 h-full w-full bg-[radial-gradient(circle_at_50%_200px,#f8fafc,transparent)]"></div>
+      
       <Toaster position="top-center" />
       
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b border-slate-100 bg-white/70 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 shrink-0 flex items-center">
+            <div className="h-9 shrink-0 flex items-center">
               <img 
                 src="/logo.png" 
                 alt="Q-bit Logo" 
@@ -358,37 +362,42 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-12 md:py-20">
-        <div className="text-center mb-12">
+      <main className="max-w-4xl mx-auto px-6 py-16 md:py-24 relative">
+        <div className="text-center mb-16">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex items-center justify-center mb-12"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-center mb-10"
           >
-            <div className="max-w-[500px] w-full px-4 flex flex-col items-center">
-              <img 
-                src="/logo.png" 
-                alt="Q-bit Logo" 
-                className="w-full h-auto object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const fallback = document.createElement('div');
-                  fallback.className = 'flex flex-col items-center gap-2';
-                  fallback.innerHTML = `
-                    <div class="w-20 h-20 rounded-full bg-[#1a1c20] flex items-center justify-center border-4 border-[#2a2d35]">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg>
-                    </div>
-                    <span class="text-6xl font-bold tracking-tighter text-[#c41e3a]">Q-bit</span>
-                  `;
-                  e.currentTarget.parentElement?.appendChild(fallback);
-                }}
-              />
+            <div className="max-w-[480px] w-full px-4 flex flex-col items-center">
+              <div className="relative group">
+                {/* Subtle glow effect behind logo */}
+                <div className="absolute -inset-4 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <img 
+                  src="/logo.png" 
+                  alt="Q-bit Logo" 
+                  className="w-full h-auto object-contain relative z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = document.createElement('div');
+                    fallback.className = 'flex flex-col items-center gap-2';
+                    fallback.innerHTML = `
+                      <div class="w-20 h-20 rounded-full bg-[#1a1c20] flex items-center justify-center border-4 border-[#2a2d35]">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg>
+                      </div>
+                      <span class="text-6xl font-bold tracking-tighter text-[#c41e3a]">Q-bit</span>
+                    `;
+                    e.currentTarget.parentElement?.appendChild(fallback);
+                  }}
+                />
+              </div>
             </div>
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-5xl font-bold tracking-tight mb-4"
+            transition={{ delay: 0.1 }}
+            className="text-5xl md:text-6xl font-bold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-b from-slate-900 to-slate-600"
           >
             Convert documents <br />
             <span className="text-slate-400">instantly in your browser.</span>
@@ -396,15 +405,15 @@ export default function App() {
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-slate-500 text-lg max-w-xl mx-auto"
+            transition={{ delay: 0.2 }}
+            className="text-slate-500 text-xl max-w-2xl mx-auto leading-relaxed"
           >
             Secure, client-side conversion. Your files never leave your device.
             Supports PDF to Text, PDF to JPEG, Text to JPEG, and Word to Text/JPEG.
           </motion.p>
         </div>
 
-        <Card className="border-none shadow-xl shadow-slate-200/50 overflow-hidden bg-white">
+        <Card className="border border-slate-200/60 shadow-2xl shadow-slate-200/40 overflow-hidden bg-white/80 backdrop-blur-sm rounded-3xl">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -641,29 +650,35 @@ export default function App() {
         </AnimatePresence>
 
         {/* Features */}
-        <div className="grid md:grid-cols-3 gap-6 mt-20">
+        <div className="grid md:grid-cols-3 gap-8 mt-24">
           {[
             {
               title: "Privacy First",
               desc: "Files are processed locally in your browser. No data is uploaded to any server.",
-              icon: <CheckCircle2 className="w-5 h-5 text-green-500" />
+              icon: <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-4"><CheckCircle2 className="w-5 h-5 text-green-600" /></div>
             },
             {
               title: "Lightning Fast",
               desc: "Optimized conversion engine ensures your documents are ready in seconds.",
-              icon: <Zap className="w-5 h-5 text-yellow-500" />
+              icon: <div className="w-10 h-10 bg-yellow-50 rounded-xl flex items-center justify-center mb-4"><Zap className="w-5 h-5 text-yellow-600" /></div>
             },
             {
               title: "High Quality",
               desc: "Crystal clear JPEG output and accurate text extraction from PDF layers.",
-              icon: <FileText className="w-5 h-5 text-blue-500" />
+              icon: <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mb-4"><FileText className="w-5 h-5 text-blue-600" /></div>
             }
           ].map((feature, i) => (
-            <div key={i} className="p-6 bg-white rounded-2xl border border-slate-100 shadow-sm">
-              <div className="mb-4">{feature.icon}</div>
-              <h4 className="font-bold mb-2">{feature.title}</h4>
+            <motion.div 
+              key={i} 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 + i * 0.1 }}
+              className="p-8 bg-white/50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-2xl hover:shadow-slate-200/40 transition-all duration-500 group"
+            >
+              {feature.icon}
+              <h4 className="font-bold text-lg mb-3 group-hover:text-primary transition-colors">{feature.title}</h4>
               <p className="text-sm text-slate-500 leading-relaxed">{feature.desc}</p>
-            </div>
+            </motion.div>
           ))}
         </div>
       </main>
