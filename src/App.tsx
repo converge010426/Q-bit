@@ -327,11 +327,18 @@ export default function App() {
       <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 shrink-0">
+            <div className="h-10 shrink-0 flex items-center">
               <img 
-                src="https://storage.googleapis.com/m-ai-studio-public-assets/q-bit-logo-full.png" 
+                src="/logo.png" 
                 alt="Q-bit Logo" 
                 className="h-full w-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = document.createElement('span');
+                  fallback.className = 'text-xl font-bold tracking-tight text-[#c41e3a]';
+                  fallback.innerText = 'Q-bit';
+                  e.currentTarget.parentElement?.appendChild(fallback);
+                }}
               />
             </div>
           </div>
@@ -358,11 +365,23 @@ export default function App() {
             animate={{ opacity: 1, scale: 1 }}
             className="flex items-center justify-center mb-12"
           >
-            <div className="max-w-[500px] w-full px-4">
+            <div className="max-w-[500px] w-full px-4 flex flex-col items-center">
               <img 
-                src="https://storage.googleapis.com/m-ai-studio-public-assets/q-bit-logo-full.png" 
+                src="/logo.png" 
                 alt="Q-bit Logo" 
                 className="w-full h-auto object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = document.createElement('div');
+                  fallback.className = 'flex flex-col items-center gap-2';
+                  fallback.innerHTML = `
+                    <div class="w-20 h-20 rounded-full bg-[#1a1c20] flex items-center justify-center border-4 border-[#2a2d35]">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg>
+                    </div>
+                    <span class="text-6xl font-bold tracking-tighter text-[#c41e3a]">Q-bit</span>
+                  `;
+                  e.currentTarget.parentElement?.appendChild(fallback);
+                }}
               />
             </div>
           </motion.div>
