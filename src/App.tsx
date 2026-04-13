@@ -327,16 +327,11 @@ export default function App() {
       <header className="border-b bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 overflow-hidden shrink-0 flex items-center justify-center">
+            <div className="h-10 shrink-0">
               <img 
                 src="https://storage.googleapis.com/m-ai-studio-public-assets/q-bit-logo-full.png" 
                 alt="Q-bit Logo" 
                 className="h-full w-auto object-contain"
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  e.currentTarget.parentElement!.innerHTML = '<div class="w-6 h-6 text-primary fill-current"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg></div><span class="font-bold text-2xl tracking-tighter text-slate-900 ml-2">Q-bit</span>';
-                }}
               />
             </div>
           </div>
@@ -361,18 +356,15 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-[400px] mx-auto mb-12 px-4"
+            className="flex items-center justify-center mb-12"
           >
-            <img 
-              src="https://storage.googleapis.com/m-ai-studio-public-assets/q-bit-logo-full.png" 
-              alt="Q-bit Logo" 
-              className="w-full h-auto object-contain drop-shadow-xl"
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement!.innerHTML = '<div class="w-24 h-24 mx-auto mb-8 rounded-3xl overflow-hidden border-4 border-white shadow-2xl shadow-primary/20 rotate-3 hover:rotate-0 transition-transform duration-500 bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 text-white fill-current drop-shadow-lg"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg></div>';
-              }}
-            />
+            <div className="max-w-[500px] w-full px-4">
+              <img 
+                src="https://storage.googleapis.com/m-ai-studio-public-assets/q-bit-logo-full.png" 
+                alt="Q-bit Logo" 
+                className="w-full h-auto object-contain"
+              />
+            </div>
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
