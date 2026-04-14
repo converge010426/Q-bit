@@ -13,17 +13,22 @@ const DB_PATH = "qbit.db";
 const db = new Database(DB_PATH);
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
-    email TEXT PRIMARY KEY,
-    credits INTEGER DEFAULT 5
+    user_id TEXT PRIMARY KEY,
+    credits INTEGER DEFAULT 0,
+    role TEXT DEFAULT 'user'
   );
 `);
 
-// Mock user for demo purposes (using the user email from runtime context)
-const DEFAULT_USER_EMAIL = "tomknsn@gmail.com";
-
-// Ensure default user exists with some trial credits
-const insertUser = db.prepare("INSERT OR IGNORE INTO users (email, credits) VALUES (?, ?)");
-insertUser.run(DEFAULT_USER_EMAIL, 10);
+// Seed initial users if table is empty
+const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+if (userCount.count === 0) {
+  // Admin user
+  db.prepare("INSERT INTO users (user_id, credits, role) VALUES (?, ?, ?)").run("admin", 9999, "admin");
+  // 10 Trial candidates
+  for (let i = 1; i <= 10; i++) {
+    db.prepare("INSERT INTO users (user_id, credits, role) VALUES (?, ?, ?)").run(`user${i}`, 5, "user");
+  }
+}
 
 // PayFast Helper Functions
 function generatePayfastSignature(data: any, passphrase?: string) {
@@ -57,33 +62,71 @@ async function startServer() {
     }
   });
 
-  app.get("/api/user/credits", (req, res) => {
-    let user = db.prepare("SELECT credits FROM users WHERE email = ?").get(DEFAULT_USER_EMAIL) as { credits: number } | undefined;
+  app.post("/api/auth/login", (req, res) => {
+    const { userId } = req.body;
+    const user = db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId) as any;
     
     if (!user) {
-      // Auto-create user if they don't exist
-      db.prepare("INSERT INTO users (email, credits) VALUES (?, ?)").run(DEFAULT_USER_EMAIL, 20);
-      user = { credits: 20 };
+      return res.status(401).json({ error: "Invalid User ID" });
     }
     
-    res.json({ credits: user.credits, email: DEFAULT_USER_EMAIL });
+    res.json({ success: true, user });
+  });
+
+  app.get("/api/user/credits", (req, res) => {
+    const userId = req.headers["x-user-id"] as string;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const user = db.prepare("SELECT credits, role FROM users WHERE user_id = ?").get(userId) as any;
+    if (!user) return res.status(404).json({ error: "User not found" });
+    
+    res.json({ credits: user.credits, userId, role: user.role });
   });
 
   app.post("/api/user/deduct", (req, res) => {
-    const user = db.prepare("SELECT credits FROM users WHERE email = ?").get(DEFAULT_USER_EMAIL) as { credits: number } | undefined;
-    
+    const userId = req.headers["x-user-id"] as string;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const user = db.prepare("SELECT credits FROM users WHERE user_id = ?").get(userId) as any;
     if (!user || user.credits <= 0) {
       return res.status(403).json({ error: "Insufficient credits" });
     }
 
-    db.prepare("UPDATE users SET credits = credits - 1 WHERE email = ?").run(DEFAULT_USER_EMAIL);
-    const updatedUser = db.prepare("SELECT credits FROM users WHERE email = ?").get(DEFAULT_USER_EMAIL) as { credits: number };
+    db.prepare("UPDATE users SET credits = credits - 1 WHERE user_id = ?").run(userId);
+    const updatedUser = db.prepare("SELECT credits FROM users WHERE user_id = ?").get(userId) as any;
     
     res.json({ success: true, credits: updatedUser.credits });
   });
 
+  // Admin Routes
+  app.get("/api/admin/users", (req, res) => {
+    const adminId = req.headers["x-user-id"] as string;
+    const admin = db.prepare("SELECT role FROM users WHERE user_id = ?").get(adminId) as any;
+    
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const users = db.prepare("SELECT * FROM users WHERE role = 'user'").all();
+    res.json(users);
+  });
+
+  app.post("/api/admin/users/credits", (req, res) => {
+    const adminId = req.headers["x-user-id"] as string;
+    const admin = db.prepare("SELECT role FROM users WHERE user_id = ?").get(adminId) as any;
+    
+    if (!admin || admin.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const { targetUserId, amount } = req.body;
+    db.prepare("UPDATE users SET credits = credits + ? WHERE user_id = ?").run(amount, targetUserId);
+    
+    res.json({ success: true });
+  });
+
   app.post("/api/payfast/checkout", (req, res) => {
-    const { tierId } = req.body;
+    const { tierId, userId } = req.body;
     const pricing = JSON.parse(fs.readFileSync("pricing.json", "utf-8"));
     const tier = pricing.tiers.find((t: any) => t.id === tierId);
 
@@ -104,11 +147,11 @@ async function startServer() {
       cancel_url: `${appUrl}/?payment=cancel`,
       notify_url: `${appUrl}/api/payfast/notify`,
       name_first: "Customer",
-      email_address: DEFAULT_USER_EMAIL,
+      email_address: "customer@example.com",
       m_payment_id: `PAY-${Date.now()}`,
       amount: tier.price.toFixed(2),
       item_name: `${tier.credits} Q-bit Credits`,
-      custom_str1: DEFAULT_USER_EMAIL,
+      custom_str1: userId,
       custom_str2: tier.credits.toString(),
     };
 
@@ -123,15 +166,13 @@ async function startServer() {
     const data = req.body;
     console.log("PayFast Notification Received:", data);
 
-    // In a real app, you should verify the signature and the PayFast server IP
-    // For this demo, we'll trust the notification if the payment_status is COMPLETE
     if (data.payment_status === "COMPLETE") {
-      const email = data.custom_str1;
+      const userId = data.custom_str1;
       const creditsToAdd = parseInt(data.custom_str2);
 
-      if (email && !isNaN(creditsToAdd)) {
-        db.prepare("UPDATE users SET credits = credits + ? WHERE email = ?").run(creditsToAdd, email);
-        console.log(`Added ${creditsToAdd} credits to ${email}`);
+      if (userId && !isNaN(creditsToAdd)) {
+        db.prepare("UPDATE users SET credits = credits + ? WHERE user_id = ?").run(creditsToAdd, userId);
+        console.log(`Added ${creditsToAdd} credits to ${userId}`);
       }
     }
 

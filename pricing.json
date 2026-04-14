@@ -3,6 +3,14 @@
   "costPerConversion": 1,
   "tiers": [
     {
+      "id": "trial",
+      "name": "Trial Top-up",
+      "credits": 100,
+      "price": 30.00,
+      "description": "100 credits for R30",
+      "popular": true
+    },
+    {
       "id": "starter",
       "name": "Starter",
       "credits": 10,
