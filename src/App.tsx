@@ -107,30 +107,38 @@ export default function App() {
 
   const handleLogin = async (id: string) => {
     try {
-      const url = '/api/auth/login';
-      console.log('Fetching:', url, 'with id:', id);
+      const url = `/api/auth/login?t=${Date.now()}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: id })
+        body: JSON.stringify({ userId: id }),
+        cache: 'no-store'
       });
       
-      if (res.status === 403) {
-        const data = await res.json();
-        if (data.needsRegistration) {
-          toast.info('Registration required for this trial ID');
-          return { needsRegistration: true };
-        }
+      const responseText = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        // Not JSON
       }
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        toast.error(errorData.error || 'Invalid User ID');
-        console.error('Login error:', res.status, errorData);
+        if (res.status === 403 && data?.needsRegistration) {
+          toast.info('Registration required for this trial ID');
+          return { needsRegistration: true };
+        }
+        
+        const errorMsg = data?.error || `Server Error (${res.status})`;
+        toast.error(errorMsg);
         return;
       }
       
-      const data = await res.json();
+      if (!data) {
+        toast.error(`Invalid server response. Please try again.`);
+        return;
+      }
+
       setUserId(data.user.user_id);
       setUserRole(data.user.role);
       localStorage.setItem('qbit_user_id', data.user.user_id);
@@ -138,7 +146,8 @@ export default function App() {
       toast.success(`Welcome back, ${data.user.user_id}!`);
       return { success: true };
     } catch (error) {
-      toast.error('Login failed');
+      console.error('Login failed:', error);
+      toast.error(`Connection error. Please check your internet.`);
     }
   };
 
@@ -823,7 +832,7 @@ function Login({ onLogin, onRegister }: { onLogin: (id: string) => Promise<any>,
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative">
       {/* Background Pattern */}
       <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
       

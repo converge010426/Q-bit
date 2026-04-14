@@ -85,6 +85,10 @@ async function startServer() {
   app.use(bodyParser.urlencoded({ extended: true }));
 
   // API Routes
+  app.get("/api/ping", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   app.get("/api/pricing", (req, res) => {
     try {
       const pricing = JSON.parse(fs.readFileSync("pricing.json", "utf-8"));
@@ -92,6 +96,10 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: "Failed to load pricing" });
     }
+  });
+
+  app.get("/api/auth/login", (req, res) => {
+    res.status(405).json({ error: "Please use POST to login" });
   });
 
   app.post("/api/auth/login", (req, res) => {
@@ -104,7 +112,10 @@ async function startServer() {
     }
 
     const cleanId = userId.toString().trim().toLowerCase();
-    logToFile(`[Auth] Login attempt for: "${userId}" (cleaned: "${cleanId}")`);
+    
+    // DEBUG: Log all users in DB
+    const allUsersInDB = db.prepare("SELECT user_id, role FROM users").all();
+    logToFile(`[Auth] Login attempt for: "${userId}" (cleaned: "${cleanId}"). DB Users: ${JSON.stringify(allUsersInDB)}`);
     
     // Case-insensitive lookup
     const user = db.prepare("SELECT * FROM users WHERE LOWER(user_id) = ?").get(cleanId) as any;
