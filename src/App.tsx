@@ -41,6 +41,7 @@ import {
   convertTextToPdf,
   convertWordToText 
 } from '@/lib/converter';
+import pricingData from '../pricing.json';
 
 type FileType = 'pdf' | 'text' | 'word' | 'unknown';
 type OutputFormat = 'text' | 'jpeg' | 'pdf';
@@ -174,15 +175,7 @@ export default function App() {
   };
 
   const fetchPricing = () => {
-    setPricing({
-      currency: "ZAR",
-      costPerConversion: 1,
-      tiers: [
-        { id: "starter", name: "Starter", credits: 10, price: 50.00, description: "Perfect for occasional conversions" },
-        { id: "pro", name: "Professional", credits: 50, price: 200.00, description: "Best for power users", popular: true },
-        { id: "enterprise", name: "Enterprise", credits: 250, price: 750.00, description: "For businesses" }
-      ]
-    });
+    setPricing(pricingData);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

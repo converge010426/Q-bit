@@ -14,22 +14,22 @@
       "id": "starter",
       "name": "Starter",
       "credits": 10,
-      "price": 50.00,
+      "price": 0.00,
       "description": "Perfect for occasional conversions"
     },
     {
       "id": "pro",
       "name": "Professional",
-      "credits": 50,
-      "price": 200.00,
+      "credits": 0,
+      "price": 0.00,
       "description": "Best for power users and small teams",
       "popular": true
     },
     {
       "id": "enterprise",
       "name": "Enterprise",
-      "credits": 250,
-      "price": 750.00,
+      "credits": 0,
+      "price": 0.00,
       "description": "High-volume processing for businesses"
     }
   ]
