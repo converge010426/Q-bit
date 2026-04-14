@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   FileText, 
   FileImage, 
@@ -107,7 +107,9 @@ export default function App() {
 
   const handleLogin = async (id: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const url = '/api/auth/login';
+      console.log('Fetching:', url, 'with id:', id);
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: id })
@@ -122,7 +124,9 @@ export default function App() {
       }
 
       if (!res.ok) {
-        toast.error('Invalid User ID');
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || 'Invalid User ID');
+        console.error('Login error:', res.status, errorData);
         return;
       }
       
