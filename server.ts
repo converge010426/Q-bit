@@ -14,20 +14,28 @@ const db = new Database(DB_PATH);
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
+    email TEXT,
     credits INTEGER DEFAULT 0,
-    role TEXT DEFAULT 'user'
+    role TEXT DEFAULT 'user',
+    registered_at DATETIME
   );
 `);
 
-// Seed initial users if table is empty
-const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
-if (userCount.count === 0) {
-  // Admin user
-  db.prepare("INSERT INTO users (user_id, credits, role) VALUES (?, ?, ?)").run("admin", 9999, "admin");
-  // 10 Trial candidates
-  for (let i = 1; i <= 10; i++) {
-    db.prepare("INSERT INTO users (user_id, credits, role) VALUES (?, ?, ?)").run(`user${i}`, 5, "user");
+// Seed initial users robustly
+const seedUser = (id: string, credits: number, role: string) => {
+  const existing = db.prepare("SELECT * FROM users WHERE user_id = ?").get(id);
+  if (!existing) {
+    db.prepare("INSERT INTO users (user_id, credits, role) VALUES (?, ?, ?)").run(id, credits, role);
+    console.log(`Seeded user: ${id}`);
   }
+};
+
+// Admin user
+seedUser("admin", 9999, "admin");
+
+// 10 Trial candidates
+for (let i = 1; i <= 10; i++) {
+  seedUser(`user${i}`, 5, "user");
 }
 
 // PayFast Helper Functions
@@ -69,8 +77,36 @@ async function startServer() {
     if (!user) {
       return res.status(401).json({ error: "Invalid User ID" });
     }
+
+    // If it's a trial user (user1-10) and not registered, they must register first
+    if (user.role === 'user' && user.user_id.startsWith('user') && !user.email && user.user_id !== 'admin') {
+      return res.status(403).json({ error: "Registration required", needsRegistration: true });
+    }
     
     res.json({ success: true, user });
+  });
+
+  app.post("/api/auth/register", (req, res) => {
+    const { userId, email } = req.body;
+    
+    if (!userId || !email) {
+      return res.status(400).json({ error: "User ID and Email are required" });
+    }
+
+    const user = db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId) as any;
+    
+    if (!user) {
+      return res.status(404).json({ error: "Invalid Trial User ID" });
+    }
+
+    if (user.email) {
+      return res.status(400).json({ error: "User already registered" });
+    }
+
+    db.prepare("UPDATE users SET email = ?, registered_at = ? WHERE user_id = ?").run(email, new Date().toISOString(), userId);
+    
+    const updatedUser = db.prepare("SELECT * FROM users WHERE user_id = ?").get(userId) as any;
+    res.json({ success: true, user: updatedUser });
   });
 
   app.get("/api/user/credits", (req, res) => {

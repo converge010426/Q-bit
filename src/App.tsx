@@ -22,7 +22,8 @@ import {
   LogOut,
   Users,
   User,
-  ShieldCheck
+  ShieldCheck,
+  Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -112,6 +113,14 @@ export default function App() {
         body: JSON.stringify({ userId: id })
       });
       
+      if (res.status === 403) {
+        const data = await res.json();
+        if (data.needsRegistration) {
+          toast.info('Registration required for this trial ID');
+          return { needsRegistration: true };
+        }
+      }
+
       if (!res.ok) {
         toast.error('Invalid User ID');
         return;
@@ -123,8 +132,35 @@ export default function App() {
       localStorage.setItem('qbit_user_id', data.user.user_id);
       localStorage.setItem('qbit_user_role', data.user.role);
       toast.success(`Welcome back, ${data.user.user_id}!`);
+      return { success: true };
     } catch (error) {
       toast.error('Login failed');
+    }
+  };
+
+  const handleRegister = async (id: string, email: string) => {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: id, email })
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Registration failed');
+        return;
+      }
+      
+      const data = await res.json();
+      setUserId(data.user.user_id);
+      setUserRole(data.user.role);
+      localStorage.setItem('qbit_user_id', data.user.user_id);
+      localStorage.setItem('qbit_user_role', data.user.role);
+      toast.success(`Registration successful! Welcome, ${data.user.user_id}`);
+      return { success: true };
+    } catch (error) {
+      toast.error('Registration failed');
     }
   };
 
@@ -376,7 +412,7 @@ export default function App() {
       <Toaster position="top-center" />
       
       {!userId ? (
-        <Login onLogin={handleLogin} />
+        <Login onLogin={handleLogin} onRegister={handleRegister} />
       ) : (
         <>
           {/* Header */}
@@ -762,8 +798,25 @@ export default function App() {
 );
 }
 
-function Login({ onLogin }: { onLogin: (id: string) => void }) {
+function Login({ onLogin, onRegister }: { onLogin: (id: string) => Promise<any>, onRegister: (id: string, email: string) => Promise<any> }) {
   const [id, setId] = useState('');
+  const [email, setEmail] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  const handleLoginSubmit = async () => {
+    const result = await onLogin(id);
+    if (result?.needsRegistration) {
+      setIsRegistering(true);
+    }
+  };
+
+  const handleRegisterSubmit = async () => {
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    await onRegister(id, email);
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative">
@@ -775,8 +828,14 @@ function Login({ onLogin }: { onLogin: (id: string) => void }) {
           <div className="flex justify-center mb-6">
             <img src="/logo.png" alt="Q-bit" className="h-16 w-auto object-contain" />
           </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Welcome to Q-bit</CardTitle>
-          <CardDescription>Enter your unique User ID to access your account</CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            {isRegistering ? 'Register Trial Account' : 'Welcome to Q-bit'}
+          </CardTitle>
+          <CardDescription>
+            {isRegistering 
+              ? 'Please provide your email to activate your trial account' 
+              : 'Enter your unique User ID to access your account'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-4">
@@ -789,14 +848,49 @@ function Login({ onLogin }: { onLogin: (id: string) => void }) {
                   value={id}
                   onChange={(e) => setId(e.target.value)}
                   placeholder="e.g. user1"
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                  onKeyDown={(e) => e.key === 'Enter' && onLogin(id)}
+                  disabled={isRegistering}
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
+                  onKeyDown={(e) => e.key === 'Enter' && (isRegistering ? handleRegisterSubmit() : handleLoginSubmit())}
                 />
               </div>
             </div>
-            <Button onClick={() => onLogin(id)} className="w-full py-6 rounded-xl text-lg font-semibold shadow-lg shadow-primary/20">
-              Login
+
+            {isRegistering && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-2"
+              >
+                <label className="text-sm font-medium text-slate-700 ml-1">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegisterSubmit()}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            <Button 
+              onClick={isRegistering ? handleRegisterSubmit : handleLoginSubmit} 
+              className="w-full py-6 rounded-xl text-lg font-semibold shadow-lg shadow-primary/20"
+            >
+              {isRegistering ? 'Register & Login' : 'Login'}
             </Button>
+
+            {isRegistering && (
+              <button 
+                onClick={() => setIsRegistering(false)}
+                className="w-full text-sm text-slate-500 hover:text-primary transition-colors"
+              >
+                Back to Login
+              </button>
+            )}
           </div>
         </CardContent>
         <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-6">
@@ -875,9 +969,17 @@ function AdminDashboard({ adminId }: { adminId: string }) {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg">{user.user_id}</h3>
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Coins className="w-3.5 h-3.5" />
-                    <span>{user.credits} Credits</span>
+                  <div className="flex flex-col gap-0.5">
+                    {user.email && (
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <Mail className="w-3 h-3" />
+                        <span>{user.email}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Coins className="w-3.5 h-3.5" />
+                      <span>{user.credits} Credits</span>
+                    </div>
                   </div>
                 </div>
               </div>
