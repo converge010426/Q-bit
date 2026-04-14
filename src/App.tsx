@@ -78,103 +78,91 @@ export default function App() {
       toast.success('Payment successful! Your credits will be updated shortly.');
       // Remove params from URL
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Refresh credits after a short delay to allow ITN to process
-      setTimeout(fetchCredits, 2000);
+      
+      // Update credits locally
+      const storedCredits = localStorage.getItem(`qbit_credits_${userId}`);
+      if (storedCredits) {
+        const newCredits = parseInt(storedCredits) + 50; // Example increment
+        localStorage.setItem(`qbit_credits_${userId}`, newCredits.toString());
+        setCredits(newCredits);
+      }
     } else if (params.get('payment') === 'cancel') {
       toast.error('Payment cancelled.');
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [userId]);
 
-  const fetchCredits = async () => {
+  const fetchCredits = () => {
     if (!userId) return;
-    try {
-      const res = await fetch('/api/user/credits', {
-        headers: { 'x-user-id': userId }
-      });
-      if (!res.ok) {
-        throw new Error('API unavailable');
-      }
-      const data = await res.json();
-      setCredits(data.credits);
-      setUserRole(data.role);
-      localStorage.setItem('qbit_user_role', data.role);
-    } catch (error) {
-      console.error('Failed to fetch credits, using demo mode:', error);
-      setCredits(50); 
+    
+    // Admin always has 9999
+    if (userId === 'admin') {
+      setCredits(9999);
+      setUserRole('admin');
+      return;
+    }
+
+    const storedCredits = localStorage.getItem(`qbit_credits_${userId}`);
+    const storedRole = localStorage.getItem(`qbit_role_${userId}`) || 'user';
+    
+    if (storedCredits !== null) {
+      setCredits(parseInt(storedCredits));
+      setUserRole(storedRole);
+    } else {
+      // Default for trial users
+      setCredits(5);
+      setUserRole('user');
+      localStorage.setItem(`qbit_credits_${userId}`, '5');
+      localStorage.setItem(`qbit_role_${userId}`, 'user');
     }
   };
 
   const handleLogin = async (id: string) => {
-    try {
-      const url = `/api/auth/login?t=${Date.now()}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: id }),
-        cache: 'no-store'
-      });
-      
-      const responseText = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        // Not JSON
-      }
-
-      if (!res.ok) {
-        if (res.status === 403 && data?.needsRegistration) {
-          toast.info('Registration required for this trial ID');
-          return { needsRegistration: true };
-        }
-        
-        const errorMsg = data?.error || `Server Error (${res.status})`;
-        toast.error(errorMsg);
-        return;
-      }
-      
-      if (!data) {
-        toast.error(`Invalid server response. Please try again.`);
-        return;
-      }
-
-      setUserId(data.user.user_id);
-      setUserRole(data.user.role);
-      localStorage.setItem('qbit_user_id', data.user.user_id);
-      localStorage.setItem('qbit_user_role', data.user.role);
-      toast.success(`Welcome back, ${data.user.user_id}!`);
-      return { success: true };
-    } catch (error) {
-      console.error('Login failed:', error);
-      toast.error(`Connection error. Please check your internet.`);
+    const cleanId = id.trim().toLowerCase();
+    
+    // Valid IDs: admin, user1-user10
+    const validUsers = ['admin', ...Array.from({ length: 10 }, (_, i) => `user${i + 1}`)];
+    
+    if (!validUsers.includes(cleanId)) {
+      toast.error('Invalid User ID');
+      return;
     }
+
+    // Check if registration is needed for user1-10
+    if (cleanId.startsWith('user')) {
+      const isRegistered = localStorage.getItem(`qbit_registered_${cleanId}`);
+      if (!isRegistered) {
+        toast.info('Registration required for this trial ID');
+        return { needsRegistration: true };
+      }
+    }
+
+    const role = cleanId === 'admin' ? 'admin' : 'user';
+    setUserId(cleanId);
+    setUserRole(role);
+    localStorage.setItem('qbit_user_id', cleanId);
+    localStorage.setItem('qbit_user_role', role);
+    
+    fetchCredits();
+    toast.success(`Welcome back, ${cleanId}!`);
+    return { success: true };
   };
 
   const handleRegister = async (id: string, email: string) => {
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: id, email })
-      });
-      
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || 'Registration failed');
-        return;
-      }
-      
-      const data = await res.json();
-      setUserId(data.user.user_id);
-      setUserRole(data.user.role);
-      localStorage.setItem('qbit_user_id', data.user.user_id);
-      localStorage.setItem('qbit_user_role', data.user.role);
-      toast.success(`Registration successful! Welcome, ${data.user.user_id}`);
-      return { success: true };
-    } catch (error) {
-      toast.error('Registration failed');
-    }
+    const cleanId = id.trim().toLowerCase();
+    localStorage.setItem(`qbit_registered_${cleanId}`, 'true');
+    localStorage.setItem(`qbit_email_${cleanId}`, email);
+    localStorage.setItem(`qbit_credits_${cleanId}`, '5');
+    localStorage.setItem(`qbit_role_${cleanId}`, 'user');
+    
+    setUserId(cleanId);
+    setUserRole('user');
+    localStorage.setItem('qbit_user_id', cleanId);
+    localStorage.setItem('qbit_user_role', 'user');
+    setCredits(5);
+    
+    toast.success(`Registration successful! Welcome, ${cleanId}`);
+    return { success: true };
   };
 
   const handleLogout = () => {
@@ -185,27 +173,16 @@ export default function App() {
     setShowAdmin(false);
   };
 
-  const fetchPricing = async () => {
-    try {
-      const res = await fetch('/api/pricing');
-      if (!res.ok) {
-        throw new Error('API unavailable');
-      }
-      const data = await res.json();
-      setPricing(data);
-    } catch (error) {
-      console.error('Failed to fetch pricing, using demo mode:', error);
-      // Fallback for static environments
-      setPricing({
-        currency: "ZAR",
-        costPerConversion: 1,
-        tiers: [
-          { id: "starter", name: "Starter", credits: 10, price: 50.00, description: "Perfect for occasional conversions" },
-          { id: "pro", name: "Professional", credits: 50, price: 200.00, description: "Best for power users", popular: true },
-          { id: "enterprise", name: "Enterprise", credits: 250, price: 750.00, description: "For businesses" }
-        ]
-      });
-    }
+  const fetchPricing = () => {
+    setPricing({
+      currency: "ZAR",
+      costPerConversion: 1,
+      tiers: [
+        { id: "starter", name: "Starter", credits: 10, price: 50.00, description: "Perfect for occasional conversions" },
+        { id: "pro", name: "Professional", credits: 50, price: 200.00, description: "Best for power users", popular: true },
+        { id: "enterprise", name: "Enterprise", credits: 250, price: 750.00, description: "For businesses" }
+      ]
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -280,17 +257,12 @@ export default function App() {
     setProgress(10);
     
     try {
-      // Deduct credit first
-      const deductRes = await fetch('/api/user/deduct', { 
-        method: 'POST',
-        headers: { 'x-user-id': userId || '' }
-      });
-      if (deductRes.ok) {
-        const deductData = await deductRes.ok ? await deductRes.json() : null;
-        if (deductData) setCredits(deductData.credits);
-      } else {
-        console.warn('Deduction API unavailable, proceeding in demo mode');
-        setCredits(prev => prev !== null ? prev - 1 : null);
+      // Deduct credit locally
+      if (userId !== 'admin') {
+        const currentCredits = credits || 0;
+        const newCredits = currentCredits - 1;
+        setCredits(newCredits);
+        localStorage.setItem(`qbit_credits_${userId}`, newCredits.toString());
       }
 
       let urls: string[] = [];
