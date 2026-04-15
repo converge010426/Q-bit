@@ -14,15 +14,15 @@
       "id": "starter",
       "name": "Starter",
       "credits": 100,
-      "price": 30.00,
+      "price": 20.00,
       "description": "Perfect for occasional conversions",
       "popular": true
     },
     {
       "id": "pro",
       "name": "Professional",
-      "credits": 50,
-      "price": 200.00,
+      "credits": 200,
+      "price": 30.00,
       "description": "Best for power users and small teams"
     }
   ]
