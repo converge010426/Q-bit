@@ -4,33 +4,26 @@
   "tiers": [
     {
       "id": "trial",
-      "name": "Trial Top-up",
-      "credits": 100,
-      "price": 30.00,
-      "description": "100 credits for R30",
-      "popular": true
+      "name": "Trial Usage",
+      "credits": 20,
+      "price": 0.00,
+      "description": "20 credits have been loaded for trial usage",
+      "isTrial": true
     },
     {
       "id": "starter",
       "name": "Starter",
-      "credits": 10,
-      "price": 0.00,
-      "description": "Perfect for occasional conversions"
+      "credits": 100,
+      "price": 30.00,
+      "description": "Perfect for occasional conversions",
+      "popular": true
     },
     {
       "id": "pro",
       "name": "Professional",
-      "credits": 0,
-      "price": 0.00,
-      "description": "Best for power users and small teams",
-      "popular": true
-    },
-    {
-      "id": "enterprise",
-      "name": "Enterprise",
-      "credits": 0,
-      "price": 0.00,
-      "description": "High-volume processing for businesses"
+      "credits": 50,
+      "price": 200.00,
+      "description": "Best for power users and small teams"
     }
   ]
 }

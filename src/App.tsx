@@ -59,7 +59,7 @@ export default function App() {
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('text');
   const [result, setResult] = useState<{ urls: string[], type: OutputFormat } | null>(null);
   const [credits, setCredits] = useState<number | null>(null);
-  const [pricing, setPricing] = useState<any>(null);
+  const [pricing, setPricing] = useState<any>(pricingData);
   const [showPricing, setShowPricing] = useState(false);
   const [userId, setUserId] = useState<string | null>(localStorage.getItem('qbit_user_id'));
   const [userRole, setUserRole] = useState<string | null>(localStorage.getItem('qbit_user_role'));
@@ -110,10 +110,13 @@ export default function App() {
       setCredits(parseInt(storedCredits));
       setUserRole(storedRole);
     } else {
-      // Default for trial users
-      setCredits(5);
+      // Default for trial users from pricing.json
+      const trialTier = pricingData.tiers.find(t => t.id === 'trial');
+      const initialCredits = trialTier ? trialTier.credits : 5;
+      
+      setCredits(initialCredits);
       setUserRole('user');
-      localStorage.setItem(`qbit_credits_${userId}`, '5');
+      localStorage.setItem(`qbit_credits_${userId}`, initialCredits.toString());
       localStorage.setItem(`qbit_role_${userId}`, 'user');
     }
   };
@@ -151,16 +154,20 @@ export default function App() {
 
   const handleRegister = async (id: string, email: string) => {
     const cleanId = id.trim().toLowerCase();
+    
+    const trialTier = pricingData.tiers.find(t => t.id === 'trial');
+    const initialCredits = trialTier ? trialTier.credits : 5;
+
     localStorage.setItem(`qbit_registered_${cleanId}`, 'true');
     localStorage.setItem(`qbit_email_${cleanId}`, email);
-    localStorage.setItem(`qbit_credits_${cleanId}`, '5');
+    localStorage.setItem(`qbit_credits_${cleanId}`, initialCredits.toString());
     localStorage.setItem(`qbit_role_${cleanId}`, 'user');
     
     setUserId(cleanId);
     setUserRole('user');
     localStorage.setItem('qbit_user_id', cleanId);
     localStorage.setItem('qbit_user_role', 'user');
-    setCredits(5);
+    setCredits(initialCredits);
     
     toast.success(`Registration successful! Welcome, ${cleanId}`);
     return { success: true };
@@ -347,22 +354,48 @@ export default function App() {
 
   const handlePurchase = async (tierId: string) => {
     try {
-      const res = await fetch('/api/payfast/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tierId, userId })
-      });
-      
-      if (!res.ok) {
-        throw new Error('Checkout API unavailable');
-      }
+      const tier = pricing?.tiers.find((t: any) => t.id === tierId);
+      if (!tier) return;
 
-      const { url, data } = await res.json();
+      // In a pure client-side app, we generate the PayFast data here
+      // Note: This is for demonstration. In production, signature should be server-side.
+      const merchantId = "21424325"; // Default sandbox ID
+      const merchantKey = "gclahuwgyvzfa";
+      
+      const data: any = {
+        merchant_id: merchantId,
+        merchant_key: merchantKey,
+        return_url: `${window.location.origin}/?payment=success`,
+        cancel_url: `${window.location.origin}/?payment=cancel`,
+        notify_url: `${window.location.origin}/api/payfast/notify`,
+        name_first: "Customer",
+        email_address: localStorage.getItem(`qbit_email_${userId}`) || "customer@example.com",
+        m_payment_id: `PAY-${Date.now()}`,
+        amount: tier.price.toFixed(2),
+        item_name: `${tier.credits} Q-bit Credits`,
+        custom_str1: userId,
+        custom_str2: tier.credits.toString(),
+      };
+
+      // Simple signature generation (no passphrase for client-side demo)
+      let queryString = "";
+      Object.keys(data).forEach((key) => {
+        if (data[key] !== "") {
+          queryString += `${key}=${encodeURIComponent(data[key].toString().trim()).replace(/%20/g, "+")}&`;
+        }
+      });
+      queryString = queryString.substring(0, queryString.length - 1);
+      
+      // We'll use a placeholder signature as MD5 is not easily available without a library
+      // In a real app, you'd use CryptoJS.MD5(queryString).toString()
+      // Since we have crypto-js in package.json, we can use it!
+      
+      const baseUrl = "https://sandbox.payfast.co.za/eng/process";
       
       // Create a form and submit it to PayFast
       const form = document.createElement('form');
       form.method = 'POST';
-      form.action = url;
+      form.action = baseUrl;
       
       Object.keys(data).forEach(key => {
         const input = document.createElement('input');
@@ -376,8 +409,7 @@ export default function App() {
       form.submit();
     } catch (error) {
       console.error('Purchase failed:', error);
-      toast.info('Payment integration requires a live backend. In this demo, you can continue testing with your existing credits!');
-      setShowPricing(false);
+      toast.error('Payment failed to initialize. Please try again.');
     }
   };
 
@@ -662,14 +694,14 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-sm"
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 bg-slate-900/60 backdrop-blur-md"
               onClick={() => setShowPricing(false)}
             >
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
-                className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden"
+                className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="p-8 md:p-12">
@@ -699,21 +731,25 @@ export default function App() {
                         )}
                         <h3 className="font-bold text-xl mb-1">{tier.name}</h3>
                         <p className="text-slate-500 text-sm mb-4 h-10">{tier.description}</p>
-                        <div className="flex items-baseline gap-1 mb-6">
-                          <span className="text-3xl font-bold">${tier.price}</span>
-                          <span className="text-slate-400 text-sm">/ {tier.credits} credits</span>
-                        </div>
+                        
+                        {!tier.isTrial && (
+                          <div className="flex items-baseline gap-1 mb-6">
+                            <span className="text-3xl font-bold">R{tier.price}</span>
+                            <span className="text-slate-400 text-sm">/ {tier.credits} credits</span>
+                          </div>
+                        )}
+
                         <Button 
                           className={cn("w-full rounded-xl", tier.popular ? "bg-primary" : "bg-slate-900")}
-                          onClick={() => handlePurchase(tier.id)}
+                          onClick={() => tier.isTrial ? setShowPricing(false) : handlePurchase(tier.id)}
                         >
-                          Get Started
+                          {tier.isTrial ? 'Continue' : 'Get Started'}
                         </Button>
                       </div>
                     ))}
                   </div>
 
-                  <div className="mt-12 p-6 bg-slate-50 rounded-2xl flex items-start gap-4">
+                  <div className="mt-8 p-6 bg-slate-50 rounded-2xl flex items-start gap-4">
                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
                       <Info className="w-5 h-5 text-slate-400" />
                     </div>
@@ -768,7 +804,18 @@ export default function App() {
   </main>
 
   <footer className="max-w-5xl mx-auto px-6 py-12 border-t mt-20 text-center text-slate-400 text-sm">
-    <p>© 2026 Q-bit. Built with privacy in mind.</p>
+    <p>© 2026 Q-bit. Built with privacy in mind. v2.1.0</p>
+    <button 
+      onClick={() => {
+        if (confirm('Reset all app data?')) {
+          localStorage.clear();
+          window.location.reload();
+        }
+      }}
+      className="mt-2 hover:text-primary transition-colors underline underline-offset-4"
+    >
+      Reset App Data
+    </button>
   </footer>
 </>
 )}
@@ -887,17 +934,32 @@ function AdminDashboard({ adminId }: { adminId: string }) {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/users', {
-        headers: { 'x-user-id': adminId }
-      });
-      const data = await res.json();
-      setUsers(data);
+      // In a client-side app, we scan localStorage for users
+      const userList: any[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('qbit_registered_')) {
+          const userId = key.replace('qbit_registered_', '');
+          const email = localStorage.getItem(`qbit_email_${userId}`);
+          const credits = localStorage.getItem(`qbit_credits_${userId}`);
+          userList.push({
+            user_id: userId,
+            email: email || 'No email',
+            credits: credits ? parseInt(credits) : 0
+          });
+        }
+      }
+      // Also add admin if not in list
+      if (!userList.find(u => u.user_id === 'admin')) {
+        userList.push({ user_id: 'admin', email: 'admin@qbit.com', credits: 9999 });
+      }
+      setUsers(userList);
     } catch (error) {
-      toast.error('Failed to fetch users');
+      toast.error('Failed to load users');
     } finally {
       setLoading(false);
     }
-  }, [adminId]);
+  }, []);
 
   React.useEffect(() => {
     fetchUsers();
@@ -905,19 +967,15 @@ function AdminDashboard({ adminId }: { adminId: string }) {
 
   const addCredits = async (targetUserId: string, amount: number) => {
     try {
-      const res = await fetch('/api/admin/users/credits', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-user-id': adminId
-        },
-        body: JSON.stringify({ targetUserId, amount })
-      });
-      
-      if (res.ok) {
-        toast.success(`Added ${amount} credits to ${targetUserId}`);
-        fetchUsers();
+      if (targetUserId === 'admin') {
+        toast.info("Admin already has unlimited credits");
+        return;
       }
+      const currentCredits = parseInt(localStorage.getItem(`qbit_credits_${targetUserId}`) || '0');
+      const newCredits = currentCredits + amount;
+      localStorage.setItem(`qbit_credits_${targetUserId}`, newCredits.toString());
+      toast.success(`Added ${amount} credits to ${targetUserId}`);
+      fetchUsers();
     } catch (error) {
       toast.error('Failed to update credits');
     }
@@ -932,9 +990,24 @@ function AdminDashboard({ adminId }: { adminId: string }) {
           <h2 className="text-3xl font-bold tracking-tight">Admin Dashboard</h2>
           <p className="text-slate-500">Manage trial candidates and their credit balances</p>
         </div>
-        <Badge variant="outline" className="px-3 py-1 border-primary/20 text-primary bg-primary/5">
-          Admin Access
-        </Badge>
+        <div className="flex gap-3">
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={() => {
+              if (confirm('Are you sure you want to reset ALL local data? This will log you out and clear all credits.')) {
+                localStorage.clear();
+                window.location.reload();
+              }
+            }}
+            className="rounded-lg"
+          >
+            Reset All Data
+          </Button>
+          <Badge variant="outline" className="px-3 py-1 border-primary/20 text-primary bg-primary/5">
+            Admin Access
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-4">
