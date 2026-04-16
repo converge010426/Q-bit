@@ -745,7 +745,7 @@ function AdminLogin() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const adminPassword = (import.meta as any).env.VITE_ADMIN_PASSWORD || 'admin123';
+    const adminPassword = (import.meta as any).env.VITE_ADMIN_PASSWORD || 'Kw@draad3';
     if (!adminPassword) {
       setError('System Error: Admin password not configured in environment.');
       return;
