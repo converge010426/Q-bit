@@ -1,1614 +1,1054 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import { Routes, Route, useNavigate, Link, useParams, Navigate } from 'react-router-dom';
-import { questions, Question } from './questions';
-import { calculateResults, typeDescriptions, AssessmentResults, MBTIType } from './logic';
-import { ChevronRight, ChevronLeft, CheckCircle2, Download, FileText, ShieldCheck, Zap, Info, Brain, List, User, Trash2, Lock, Mail, X, Loader2, CreditCard } from 'lucide-react';
-import { PRICING, BANKING_DETAILS, SYSTEM_VERSION } from './constants';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-const Letterhead = () => (
-  <header className="bg-navy p-8 md:p-12 -mx-8 md:-mx-16 -mt-8 md:-mt-16 mb-12 flex flex-col items-center text-center border-b border-gold/20">
-    <Link to="/" className="flex flex-col items-center hover:opacity-90 transition-opacity">
-      <h1 className="font-sans font-bold text-4xl md:text-5xl tracking-[4px] text-gold uppercase mb-4 flex items-start justify-center antialiased">
-        CONVERGE<sup className="text-xs md:text-sm font-light mt-1 ml-0.5">™</sup>
-      </h1>
-      <div className="space-y-1 text-white text-sm md:text-base font-sans font-semibold leading-tight tracking-wide subpixel-antialiased opacity-95">
-        <p>Three platforms. One integrated psychological insight.</p>
-        <p>Three validated frameworks. One evidence-based hiring insight.</p>
-        <p>Three frameworks. One executive advantage.</p>
-        <p>Three developmental platforms. One transformational growth tool.</p>
-      </div>
-    </Link>
-  </header>
-);
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { 
+  FileText, 
+  FileImage, 
+  Upload, 
+  Download, 
+  X, 
+  CheckCircle2, 
+  Loader2, 
+  ArrowRight,
+  FileUp,
+  Settings2,
+  Zap,
+  Coins,
+  ShoppingCart,
+  Info,
+  LogOut,
+  Users,
+  User,
+  ShieldCheck,
+  Mail
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import confetti from 'canvas-confetti';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Toaster, toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { 
+  convertPdfToText, 
+  convertPdfToImages, 
+  convertTextToImage,
+  convertTextToPdf,
+  convertWordToText 
+} from '@/lib/converter';
+import pricingData from '../pricing.json';
 
-const Footer = () => (
-  <footer className="py-12 border-t border-gold/10 mt-auto">
-    <div className="flex flex-col items-center text-center space-y-2">
-      <p className="font-sans text-[10px] font-bold tracking-[3px] text-grey uppercase">
-        © {new Date().getFullYear()} CONVERGE™ • ALL RIGHTS RESERVED
-      </p>
-      <p className="font-sans text-[8px] tracking-[1px] text-grey/60 uppercase max-w-xs">
-        This assessment protocol and its integrated psychological architecture are protected intellectual property.
-      </p>
-      <p className="font-sans text-[8px] text-gold/50 uppercase mt-4 tracking-widest">
-        System Version: {SYSTEM_VERSION}
-      </p>
-    </div>
-  </footer>
-);
+type FileType = 'pdf' | 'text' | 'word' | 'unknown';
+type OutputFormat = 'text' | 'jpeg' | 'pdf';
 
-const PayfastButton = ({ productKey }: { productKey: string }) => {
-  const merchantId = (import.meta as any).env.VITE_PAYFAST_MERCHANT_ID || '21424325';
-  const merchantKey = (import.meta as any).env.VITE_PAYFAST_MERCHANT_KEY || 'gclahuwgyvza';
-  const payfastUrl = (import.meta as any).env.VITE_PAYFAST_URL || 'https://www.payfast.co.za/eng/process';
-  
-  const product = PRICING.products[productKey as keyof typeof PRICING.products];
-  if (!product) return null;
-
-  // Extract numeric value from price string (e.g., "R 150" -> 150)
-  const amount = product.price.replace(/[^0-9]/g, '');
-  const submissionId = localStorage.getItem('last_submission_id') || 'CONVERGE';
-
-  return (
-    <form action={payfastUrl} method="post" className="w-full">
-      <input type="hidden" name="merchant_id" value={merchantId} />
-      <input type="hidden" name="merchant_key" value={merchantKey} />
-      <input type="hidden" name="amount" value={amount} />
-      <input type="hidden" name="item_name" value={product.name} />
-      <input type="hidden" name="m_payment_id" value={submissionId} />
-      
-      <button 
-        type="submit"
-        className="w-full bg-navy text-white py-4 px-6 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-gold transition-all flex items-center justify-center gap-3 shadow-lg group"
-      >
-        <CreditCard className="w-5 h-5 text-gold group-hover:text-white transition-colors" />
-        Pay Now with Payfast
-      </button>
-    </form>
-  );
-};
+interface FileState {
+  file: File;
+  type: FileType;
+  id: string;
+}
 
 export default function App() {
-  const navigate = useNavigate();
-  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
-  const [answers, setAnswers] = React.useState<Record<number, number>>({});
-  const [userName, setUserName] = React.useState('');
-  const [userEmail, setUserEmail] = React.useState('');
-  const [selectedProduct, setSelectedProduct] = React.useState<'mbti' | 'comprehensive' | 'recruiter'>('mbti');
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
-  
-  // Job Context State for Converge 3
-  const [jobTitle, setJobTitle] = React.useState('');
-  const [jobEnvironment, setJobEnvironment] = React.useState('');
-  const [jobChallenge, setJobChallenge] = React.useState('');
-  const [jobDescription, setJobDescription] = React.useState('');
+  const [fileState, setFileState] = useState<FileState | null>(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>('text');
+  const [result, setResult] = useState<{ urls: string[], type: OutputFormat } | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [pricing, setPricing] = useState<any>(pricingData);
+  const [showPricing, setShowPricing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(localStorage.getItem('qbit_user_id'));
+  const [userRole, setUserRole] = useState<string | null>(localStorage.getItem('qbit_user_role'));
+  const [showAdmin, setShowAdmin] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch user credits and pricing on mount
   React.useEffect(() => {
-    console.log('[Frontend] Environment Check:');
-    console.log('- VITE_SUPABASE_URL defined:', !!import.meta.env.VITE_SUPABASE_URL);
-    console.log('- VITE_SUPABASE_ANON_KEY defined:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-    console.log('- Vercel Environment:', !!(window as any).location.hostname.includes('vercel.app'));
-    console.log('- Current Hostname:', window.location.hostname);
-  }, []);
+    if (userId) {
+      fetchCredits();
+      fetchPricing();
+    }
 
-  const handleAnswer = (value: number) => {
-    const q = questions[currentQuestionIndex];
-    setAnswers(prev => ({ ...prev, [q.id]: value }));
+    // Check for payment status in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') === 'success') {
+      toast.success('Payment successful! Your credits will be updated shortly.');
+      // Remove params from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Update credits locally
+      const storedCredits = localStorage.getItem(`qbit_credits_${userId}`);
+      if (storedCredits) {
+        const newCredits = parseInt(storedCredits) + 50; // Example increment
+        localStorage.setItem(`qbit_credits_${userId}`, newCredits.toString());
+        setCredits(newCredits);
+      }
+    } else if (params.get('payment') === 'cancel') {
+      toast.error('Payment cancelled.');
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [userId]);
+
+  const fetchCredits = () => {
+    if (!userId) return;
     
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+    // Admin always has 9999
+    if (userId === 'admin') {
+      setCredits(9999);
+      setUserRole('admin');
+      return;
+    }
+
+    const storedCredits = localStorage.getItem(`qbit_credits_${userId}`);
+    const storedRole = localStorage.getItem(`qbit_role_${userId}`) || 'user';
+    
+    if (storedCredits !== null) {
+      setCredits(parseInt(storedCredits));
+      setUserRole(storedRole);
+    } else {
+      // Default for trial users from pricing.json
+      const trialTier = pricingData.tiers.find(t => t.id === 'trial');
+      const initialCredits = trialTier ? trialTier.credits : 5;
+      
+      setCredits(initialCredits);
+      setUserRole('user');
+      localStorage.setItem(`qbit_credits_${userId}`, initialCredits.toString());
+      localStorage.setItem(`qbit_role_${userId}`, 'user');
     }
   };
 
-  const submitAssessment = async (jobData?: any) => {
-    setIsSubmitting(true);
-    const results = calculateResults(answers);
+  const handleLogin = async (id: string) => {
+    const cleanId = id.trim().toLowerCase();
     
-    // Normalize results to match the structure that we know works (Test User structure)
-    const normalizedResults = {
-      mbti: results.mbti,
-      bigFive: results.bigFive,
-      ei: results.ei,
-      scores: {
-        E: results.bigFive.extraversion,
-        O: results.bigFive.openness,
-        C: results.bigFive.conscientiousness,
-        A: results.bigFive.agreeableness,
-        S: results.bigFive.emotionalStability
+    // Valid IDs: admin, user1-user10
+    const validUsers = ['admin', ...Array.from({ length: 10 }, (_, i) => `user${i + 1}`)];
+    
+    if (!validUsers.includes(cleanId)) {
+      toast.error('Invalid User ID');
+      return;
+    }
+
+    // Check if registration is needed for user1-10
+    if (cleanId.startsWith('user')) {
+      const isRegistered = localStorage.getItem(`qbit_registered_${cleanId}`);
+      if (!isRegistered) {
+        toast.info('Registration required for this trial ID');
+        return { needsRegistration: true };
       }
-    };
+    }
+
+    const role = cleanId === 'admin' ? 'admin' : 'user';
+    setUserId(cleanId);
+    setUserRole(role);
+    localStorage.setItem('qbit_user_id', cleanId);
+    localStorage.setItem('qbit_user_role', role);
     
-    console.log('[Frontend] Submitting assessment:', {
-      name: userName,
-      email: userEmail,
-      product: selectedProduct,
-      answersCount: Object.keys(answers).length,
-      mbti: results.mbti,
-      jobData
+    fetchCredits();
+    toast.success(`Welcome back, ${cleanId}!`);
+    return { success: true };
+  };
+
+  const handleRegister = async (id: string, email: string) => {
+    const cleanId = id.trim().toLowerCase();
+    
+    const trialTier = pricingData.tiers.find(t => t.id === 'trial');
+    const initialCredits = trialTier ? trialTier.credits : 5;
+
+    localStorage.setItem(`qbit_registered_${cleanId}`, 'true');
+    localStorage.setItem(`qbit_email_${cleanId}`, email);
+    localStorage.setItem(`qbit_credits_${cleanId}`, initialCredits.toString());
+    localStorage.setItem(`qbit_role_${cleanId}`, 'user');
+    
+    setUserId(cleanId);
+    setUserRole('user');
+    localStorage.setItem('qbit_user_id', cleanId);
+    localStorage.setItem('qbit_user_role', 'user');
+    setCredits(initialCredits);
+    
+    toast.success(`Registration successful! Welcome, ${cleanId}`);
+    return { success: true };
+  };
+
+  const handleLogout = () => {
+    setUserId(null);
+    setUserRole(null);
+    localStorage.removeItem('qbit_user_id');
+    localStorage.removeItem('qbit_user_role');
+    setShowAdmin(false);
+  };
+
+  const fetchPricing = () => {
+    setPricing(pricingData);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const processFile = (file: File) => {
+    let type: FileType = 'unknown';
+    const fileName = file.name.toLowerCase();
+    if (file.type === 'application/pdf' || fileName.endsWith('.pdf')) {
+      type = 'pdf';
+    } else if (file.type === 'text/plain' || fileName.endsWith('.txt')) {
+      type = 'text';
+    } else if (
+      file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+      file.type === 'application/msword' ||
+      fileName.endsWith('.docx') ||
+      fileName.endsWith('.doc')
+    ) {
+      type = 'word';
+    }
+    
+    if (type === 'unknown') {
+      toast.error(`Unsupported file type: ${file.type || 'unknown'}. Please upload a PDF, Text, or Word file.`);
+      return;
+    }
+
+    setFileState({
+      file,
+      type,
+      id: Math.random().toString(36).substring(7)
     });
+    setResult(null);
+    setProgress(0);
     
-    try {
-      const response = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: userName,
-          email: userEmail,
-          answers,
-          results: normalizedResults,
-          product: selectedProduct,
-          ...jobData
-        })
-      });
-      
-      console.log('[Frontend] Submission response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[Frontend] Submission successful:', data);
-        
-        // Store in local history for debugging
-        const history = JSON.parse(localStorage.getItem('submission_history') || '[]');
-        history.unshift({
-          id: data.id,
-          timestamp: new Date().toISOString(),
-          name: userName,
-          email: userEmail
-        });
-        localStorage.setItem('submission_history', JSON.stringify(history.slice(0, 5)));
-        
-        if (data.id) localStorage.setItem('last_submission_id', data.id);
-        localStorage.setItem('last_product', selectedProduct);
-        navigate('/thank-you');
-      } else {
-        let errorMessage = 'There was an error submitting your assessment. Please try again.';
-        let errorDetails = '';
-        let rawBody = '';
-        
-        try {
-          rawBody = await response.text();
-          const errorData = JSON.parse(rawBody);
-          errorMessage = errorData.message || errorMessage;
-          errorDetails = errorData.details || JSON.stringify(errorData);
-        } catch (e) {
-          errorMessage = `Server Error (${response.status}): ${response.statusText || 'Unknown error'}`;
-          errorDetails = rawBody || 'No additional details available.';
-        }
-        
-        console.error('[Frontend] Submission failed:', errorMessage, errorDetails);
-        alert(`SUBMISSION FAILED (${SYSTEM_VERSION})\n\nError: ${errorMessage}\n\nDetails: ${errorDetails.substring(0, 500)}${errorDetails.length > 500 ? '...' : ''}\n\nPlease take a screenshot of this and send it to me.`);
-      }
-    } catch (error: any) {
-      console.error('[Frontend] Network error during submission:', error);
-      alert(`Network error: ${error.message || 'Please check your connection.'}`);
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Set default output based on input
+    if (type === 'text') setOutputFormat('jpeg');
+    else if (type === 'word') setOutputFormat('pdf');
+    else setOutputFormat('text');
   };
 
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
-
-  return (
-    <Routes>
-      <Route path="/" element={
-        <div className="page-container p-8 md:p-16">
-          <Letterhead />
-          <main className="flex-1 py-12">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-warm p-8 border-b border-gold/20 mb-12"
-            >
-              <p className="text-lg leading-relaxed text-dark font-bold max-w-2xl">
-                Welcome to the <strong>CONVERGE<sup>™</sup></strong> assessment. This protocol integrates MBTI, IPIP Big Five, and Emotional Intelligence frameworks to build a verified psychological architecture of your personality profile.
-              </p>
-            </motion.div>
-
-            <div className="space-y-12 max-w-6xl">
-              <section>
-                <h2 className="section-label mb-6">Select Assessment Product</h2>
-                <div className="grid md:grid-cols-3 gap-6">
-                  <button 
-                    onClick={() => setSelectedProduct('mbti')}
-                    className={`p-6 border text-left transition-all relative flex flex-col justify-between ${selectedProduct === 'mbti' ? 'bg-navy text-white border-navy shadow-xl scale-[1.02]' : 'bg-white text-dark border-gold/20 hover:border-gold'}`}
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full ${selectedProduct === 'mbti' ? 'bg-gold text-navy' : 'bg-gold/10 text-gold'}`}>
-                            <Brain className="w-6 h-6" />
-                          </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'mbti' ? 'text-gold' : 'text-grey'}`}>
-                            Individual
-                          </span>
-                        </div>
-                        {selectedProduct === 'mbti' && <CheckCircle2 className="w-6 h-6 text-gold" />}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">{PRICING.products.mbti.name}</h3>
-                      <p className={`text-sm mb-6 ${selectedProduct === 'mbti' ? 'text-white/80' : 'text-grey'}`}>
-                        {PRICING.products.mbti.description}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span className={`text-base font-black tracking-widest uppercase ${selectedProduct === 'mbti' ? 'text-gold' : 'text-navy/70'}`}>Option 1</span>
-                      <div className="text-right">
-                        <span className="text-4xl font-black leading-none">{PRICING.products.mbti.price}</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => setSelectedProduct('comprehensive')}
-                    className={`p-6 border text-left transition-all relative flex flex-col justify-between ${selectedProduct === 'comprehensive' ? 'bg-navy text-white border-navy shadow-xl scale-[1.02]' : 'bg-white text-dark border-gold/20 hover:border-gold'}`}
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full ${selectedProduct === 'comprehensive' ? 'bg-gold text-navy' : 'bg-gold/10 text-gold'}`}>
-                            <Zap className="w-6 h-6" />
-                          </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'comprehensive' ? 'text-gold' : 'text-grey'}`}>
-                            Individual
-                          </span>
-                        </div>
-                        {selectedProduct === 'comprehensive' && <CheckCircle2 className="w-6 h-6 text-gold" />}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">{PRICING.products.comprehensive.name}</h3>
-                      <p className={`text-sm mb-6 ${selectedProduct === 'comprehensive' ? 'text-white/80' : 'text-grey'}`}>
-                        {PRICING.products.comprehensive.description}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span className={`text-base font-black tracking-widest uppercase ${selectedProduct === 'comprehensive' ? 'text-gold' : 'text-navy/70'}`}>Option 2</span>
-                      <div className="text-right">
-                        <span className="text-4xl font-black leading-none">{PRICING.products.comprehensive.price}</span>
-                      </div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => setSelectedProduct('recruiter')}
-                    className={`p-6 border text-left transition-all relative flex flex-col justify-between ${selectedProduct === 'recruiter' ? 'bg-navy text-white border-navy shadow-xl scale-[1.02]' : 'bg-white text-dark border-gold/20 hover:border-gold'}`}
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full ${selectedProduct === 'recruiter' ? 'bg-gold text-navy' : 'bg-gold/10 text-gold'}`}>
-                            <ShieldCheck className="w-6 h-6" />
-                          </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'recruiter' ? 'text-gold' : 'text-grey'}`}>
-                            Recruiter
-                          </span>
-                        </div>
-                        {selectedProduct === 'recruiter' && <CheckCircle2 className="w-6 h-6 text-gold" />}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">{PRICING.products.recruiter.name}</h3>
-                      <p className={`text-sm mb-6 ${selectedProduct === 'recruiter' ? 'text-white/80' : 'text-grey'}`}>
-                        {PRICING.products.recruiter.description}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-end mt-auto">
-                      <span className={`text-base font-black tracking-widest uppercase ${selectedProduct === 'recruiter' ? 'text-gold' : 'text-navy/70'}`}>Option 3</span>
-                      <div className="text-right">
-                        <span className="text-4xl font-black leading-none">{PRICING.products.recruiter.price}</span>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-                <p className="text-[9px] text-grey font-bold uppercase tracking-widest text-center mt-6 opacity-70">
-                  {PRICING.disclaimer}
-                </p>
-              </section>
-
-              <section className="bg-white border border-gold/20 shadow-xl overflow-hidden">
-                <div className="bg-navy p-4 text-center border-b border-gold/30">
-                  <h2 className="text-gold font-sans font-black tracking-[4px] uppercase text-sm">Payment Information</h2>
-                </div>
-                
-                <div className="p-0 overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gold/10">
-                        <th className="p-6 text-[10px] font-black text-grey uppercase tracking-[2px]">Product Tier</th>
-                        <th className="p-6 text-[10px] font-black text-navy uppercase tracking-[2px]">Fee ({PRICING.currency})</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-dark font-bold">
-                      <tr className="border-b border-gold/5 hover:bg-gold/5 transition-colors">
-                        <td className="p-6 text-sm">{PRICING.products.mbti.name}</td>
-                        <td className="p-6 text-sm text-navy">{PRICING.products.mbti.price}</td>
-                      </tr>
-                      <tr className="border-b border-gold/5 hover:bg-gold/5 transition-colors">
-                        <td className="p-6 text-sm">{PRICING.products.comprehensive.name}</td>
-                        <td className="p-6 text-sm text-navy">{PRICING.products.comprehensive.price}</td>
-                      </tr>
-                      <tr className="hover:bg-gold/5 transition-colors">
-                        <td className="p-6 text-sm">{PRICING.products.recruiter.name}</td>
-                        <td className="p-6 text-sm text-navy">{PRICING.products.recruiter.price}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="p-8 bg-warm/30 border-t border-gold/10">
-                  <p className="text-[10px] text-navy font-black italic text-center mb-8 tracking-wide">
-                    {PRICING.paymentNote}
-                  </p>
-                  
-                  <div className="flex flex-col items-center">
-                    <h3 className="text-navy font-sans font-black tracking-[3px] uppercase text-[11px] mb-6 border-b border-gold/30 pb-2">Banking Details ({PRICING.currency})</h3>
-                    <div className="grid grid-cols-2 gap-x-12 gap-y-4 max-w-md w-full">
-                      <div className="text-right">
-                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Bank</span>
-                        <span className="text-sm font-black text-navy">{BANKING_DETAILS.bank}</span>
-                      </div>
-                      <div className="text-left">
-                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Account Holder</span>
-                        <span className="text-sm font-black text-navy">{BANKING_DETAILS.accountHolder}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Account Number</span>
-                        <span className="text-sm font-black text-dark">{BANKING_DETAILS.accountNumber}</span>
-                      </div>
-                      <div className="text-left">
-                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Branch Code</span>
-                        <span className="text-sm font-black text-dark">{BANKING_DETAILS.branchCode}</span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-gold font-black uppercase tracking-[2px] mt-8 bg-navy px-4 py-2 rounded">
-                      Reference: {BANKING_DETAILS.reference}
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              <div className="grid md:grid-cols-2 gap-12">
-                <section>
-                  <h2 className="section-label">Instructions</h2>
-                  <ul className="space-y-4 text-dark font-bold">
-                    <li className="flex gap-3">
-                      <span className="text-gold font-bold">01</span>
-                      <p>There are 60 questions in total. It should take approximately 10-15 minutes to complete.</p>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="text-gold font-bold">02</span>
-                      <p>Answer honestly based on your natural tendencies, not how you think you should behave.</p>
-                    </li>
-                    <li className="flex gap-3">
-                      <span className="text-gold font-bold">03</span>
-                      <p>Try to avoid 'Neutral' answers where possible to ensure a more precise profile.</p>
-                    </li>
-                  </ul>
-                </section>
-
-                <section className="space-y-6">
-                  <div>
-                    <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Candidate Name</label>
-                    <input 
-                      type="text" 
-                      value={userName}
-                      onChange={(e) => setUserName(e.target.value)}
-                      placeholder="Enter your full name"
-                      className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Email Address</label>
-                    <input 
-                      type="email" 
-                      value={userEmail}
-                      onChange={(e) => setUserEmail(e.target.value)}
-                      placeholder="Enter your email address"
-                      className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
-                    />
-                  </div>
-                  <button 
-                    onClick={() => navigate('/quiz')}
-                    disabled={!userName || !userEmail}
-                    className="w-full group flex items-center justify-center gap-3 bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Begin Assessment
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </section>
-              </div>
-            </div>
-          </main>
-          <Footer />
-        </div>
-      } />
-
-      <Route path="/quiz" element={
-        <div className="page-container p-8 md:p-16 bg-cream">
-          <Letterhead />
-          <div className="mb-12">
-            <div className="flex justify-end items-center mb-6">
-              <div className="text-right">
-                <h2 className="font-sans text-[10px] font-bold tracking-[4px] text-gold uppercase">Question {currentQuestionIndex + 1} of {questions.length}</h2>
-                <span className="font-sans text-[10px] text-grey font-bold tracking-wider">{Math.round(progress)}% Complete</span>
-              </div>
-            </div>
-            <div className="h-1 w-full bg-gold/10 rounded-full overflow-hidden">
-              <motion.div 
-                className="h-full bg-gold" 
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-
-          <main className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full">
-            <motion.div 
-              key={questions[currentQuestionIndex].id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="mb-12"
-            >
-              <h3 className="text-3xl md:text-4xl text-navy font-bold leading-tight mb-12 antialiased">
-                {questions[currentQuestionIndex].text}
-              </h3>
-
-              <div className="grid grid-cols-1 gap-3">
-                {[
-                  { label: 'Strongly Agree', val: 5 },
-                  { label: 'Agree', val: 4 },
-                  { label: 'Neutral', val: 3 },
-                  { label: 'Disagree', val: 2 },
-                  { label: 'Strongly Disagree', val: 1 },
-                ].map((opt) => (
-                  <button
-                    key={opt.val}
-                    onClick={() => handleAnswer(opt.val)}
-                    className={`flex items-center justify-between p-6 border transition-all font-sans text-sm font-bold tracking-wide antialiased
-                      ${answers[questions[currentQuestionIndex].id] === opt.val 
-                        ? 'bg-navy text-white border-navy' 
-                        : 'bg-white text-dark border-gold/20 hover:border-gold shadow-sm'}`}
-                  >
-                    {opt.label}
-                    {answers[questions[currentQuestionIndex].id] === opt.val && <CheckCircle2 className="w-5 h-5 text-gold" />}
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-
-            <div className="flex justify-between items-center mt-auto pt-8">
-              <button 
-                disabled={currentQuestionIndex === 0}
-                onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
-                className="flex items-center gap-2 text-grey hover:text-navy disabled:opacity-30 transition-colors font-sans text-[10px] font-bold uppercase tracking-widest"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-
-              {currentQuestionIndex === questions.length - 1 && answers[questions[currentQuestionIndex].id] && (
-                <button 
-                  onClick={() => {
-                    if (selectedProduct === 'recruiter') {
-                      navigate('/job-context');
-                    } else {
-                      submitAssessment();
-                    }
-                  }}
-                  disabled={isSubmitting}
-                  className="bg-gold text-white px-10 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-gold/90 transition-all shadow-lg disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Submitting...' : (selectedProduct === 'recruiter' ? 'NEXT: JOB CONTEXT' : 'SUBMIT')}
-                </button>
-              )}
-            </div>
-          </main>
-          <Footer />
-        </div>
-      } />
-
-      <Route path="/job-context" element={
-        <div className="page-container p-8 md:p-16 bg-cream">
-          <Letterhead />
-          <main className="flex-1 max-w-2xl mx-auto w-full py-12">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white p-10 border border-gold/20 shadow-2xl"
-            >
-              <div className="mb-8 text-center">
-                <div className="inline-block p-3 bg-gold/10 rounded-full text-gold mb-4">
-                  <ShieldCheck className="w-8 h-8" />
-                </div>
-                <div className="mb-2">
-                  <span className="font-sans text-[10px] font-bold tracking-[4px] text-gold uppercase">Step 2 of 2</span>
-                </div>
-                <h2 className="text-3xl text-navy font-bold uppercase tracking-tight mb-2">Define the Role</h2>
-                <p className="text-grey font-bold text-sm uppercase tracking-widest mb-4">Converge 3 • Candidate Suitability Analysis</p>
-                <p className="text-navy/60 text-xs font-sans font-medium italic">"Now, let's contextualize your results for the specific position."</p>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Job Title</label>
-                  <input 
-                    type="text" 
-                    value={jobTitle}
-                    onChange={(e) => setJobTitle(e.target.value)}
-                    placeholder="e.g. Senior Sales Executive"
-                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors placeholder:text-white/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Primary Environment</label>
-                  <select 
-                    value={jobEnvironment}
-                    onChange={(e) => setJobEnvironment(e.target.value)}
-                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors"
-                  >
-                    <option value="" className="bg-white text-navy">Select Environment...</option>
-                    <option value="High-pressure / Fast-paced" className="bg-white text-navy">High-pressure / Fast-paced</option>
-                    <option value="Collaborative / Team-oriented" className="bg-white text-navy">Collaborative / Team-oriented</option>
-                    <option value="Solo / Technical / Focused" className="bg-white text-navy">Solo / Technical / Focused</option>
-                    <option value="Client-facing / Relationship-based" className="bg-white text-navy">Client-facing / Relationship-based</option>
-                    <option value="Creative / Unstructured" className="bg-white text-navy">Creative / Unstructured</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Key Challenge</label>
-                  <input 
-                    type="text" 
-                    value={jobChallenge}
-                    onChange={(e) => setJobChallenge(e.target.value)}
-                    placeholder="e.g. Requires high emotional resilience"
-                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors placeholder:text-white/30"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Job Description (Optional)</label>
-                  <textarea 
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                    placeholder="Paste the job description or key requirements here..."
-                    rows={4}
-                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors resize-none placeholder:text-white/30"
-                  />
-                </div>
-
-                <button 
-                  onClick={() => submitAssessment({
-                    jobTitle,
-                    jobEnvironment,
-                    jobChallenge,
-                    jobDescription
-                  })}
-                  disabled={isSubmitting || !jobTitle || !jobEnvironment}
-                  className="w-full bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all shadow-lg disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Processing Analysis...' : 'Complete Analysis'}
-                </button>
-              </div>
-            </motion.div>
-          </main>
-          <Footer />
-        </div>
-      } />
-
-      <Route path="/thank-you" element={
-        <div className="page-container p-8 md:p-16 bg-cream">
-          <Letterhead />
-          <main className="flex-1 flex flex-col items-center justify-center text-center py-12 max-w-5xl mx-auto">
-            <div className="w-20 h-20 bg-gold/10 rounded-full flex items-center justify-center text-gold mb-8">
-              <CheckCircle2 className="w-10 h-10" />
-            </div>
-            <h2 className="text-4xl text-navy font-bold mb-4 antialiased uppercase tracking-tight">Assessment Submitted</h2>
-            <p className="text-xl text-dark font-semibold max-w-lg mb-8 antialiased">
-              Thank you, {userName || 'Candidate'}. Your assessment has been successfully received and is being processed.
-            </p>
-            
-            <div className="bg-warm p-8 border-l-4 border-gold max-w-xl mb-12">
-              <p className="text-navy font-bold italic leading-relaxed antialiased">
-                "The results will be sent to your e-mail after verification that the assessment fee has been paid."
-              </p>
-              {localStorage.getItem('last_submission_id') && (
-                <p className="text-[10px] text-navy/40 mt-4 uppercase tracking-widest">
-                  Submission ID: {localStorage.getItem('last_submission_id')}
-                </p>
-              )}
-            </div>
-
-            <div className="w-full max-w-4xl bg-white border border-gold/20 shadow-2xl overflow-hidden mb-12 text-left">
-              <div className="bg-navy p-6 text-center">
-                <h3 className="text-gold font-sans font-bold tracking-[3px] uppercase text-sm antialiased">Payment Information</h3>
-              </div>
-              <div className="p-8 space-y-10">
-                {/* Pricing Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left">
-                    <thead>
-                      <tr className="border-b border-gold/20">
-                        <th className="py-3 px-4 font-sans text-[9px] font-bold tracking-widest text-grey uppercase">Product Tier</th>
-                        <th className="py-3 px-4 font-sans text-[9px] font-bold tracking-widest text-navy uppercase">Fee ({PRICING.currency})</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-sm font-bold">
-                      <tr className="border-b border-gold/5">
-                        <td className="py-4 px-4 text-navy">{PRICING.products.mbti.name}</td>
-                        <td className="py-4 px-4 text-navy">{PRICING.products.mbti.price}</td>
-                      </tr>
-                      <tr className="border-b border-gold/5">
-                        <td className="py-4 px-4 text-navy">{PRICING.products.comprehensive.name}</td>
-                        <td className="py-4 px-4 text-navy">{PRICING.products.comprehensive.price}</td>
-                      </tr>
-                      <tr>
-                        <td className="py-4 px-4 text-navy">{PRICING.products.recruiter.name}</td>
-                        <td className="py-4 px-4 text-navy">{PRICING.products.recruiter.price}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <p className="text-[10px] text-navy font-bold uppercase tracking-tight italic px-4 text-center">
-                  {PRICING.paymentNote}
-                </p>
-
-                {/* Payment Options Section */}
-                <div className="px-4">
-                  <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                    {/* Banking Details Table */}
-                    <div className="space-y-4">
-                      <h4 className="font-sans font-bold text-navy uppercase text-[10px] tracking-widest border-b border-gold/20 pb-2 text-center">EFT Banking Details ({PRICING.currency})</h4>
-                      <table className="w-full text-xs">
-                        <tbody>
-                          <tr>
-                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter w-32">Bank</td>
-                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.bank}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Account Name</td>
-                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.accountHolder}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Account Number</td>
-                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.accountNumber}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Branch Code</td>
-                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.branchCode} (Universal)</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Payfast Integration */}
-                    <div className="space-y-4">
-                      <h4 className="font-sans font-bold text-navy uppercase text-[10px] tracking-widest border-b border-gold/20 pb-2 text-center">Online Payment (Payfast)</h4>
-                      <div className="h-full flex flex-col items-center justify-center border border-gold/10 p-6 bg-gold/5 rounded-sm">
-                        <div className="mb-6 text-center">
-                          <p className="text-[10px] text-navy font-bold uppercase tracking-widest mb-2">Secure Instant EFT & Card</p>
-                          <p className="text-[8px] text-grey uppercase tracking-tighter">Powered by Payfast South Africa</p>
-                        </div>
-                        
-                        <PayfastButton productKey={localStorage.getItem('last_product') || 'mbti'} />
-                        
-                        <p className="text-[8px] text-grey/60 uppercase tracking-tighter mt-4 text-center">
-                          Your report will be processed upon payment verification
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-cream p-6 text-center border-t border-gold/10">
-                <p className="text-[10px] text-grey font-bold uppercase tracking-[3px] antialiased">
-                  Reference: {BANKING_DETAILS.reference}
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => navigate('/')}
-              className="text-navy font-sans text-[10px] font-bold tracking-[3px] uppercase border-b border-navy pb-1 hover:text-gold hover:border-gold transition-colors"
-            >
-              Return Home
-            </button>
-          </main>
-          <Footer />
-        </div>
-      } />
-
-      <Route path="/admin" element={
-        <ProtectedRoute>
-          <AdminDashboard />
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/result/:id" element={
-        <ProtectedRoute>
-          <AdminResultDetail />
-        </ProtectedRoute>
-      } />
-      <Route path="/admin/login" element={<AdminLogin />} />
-    </Routes>
-  );
-}
-
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const isAuthenticated = localStorage.getItem('admin_auth') === 'true';
-  if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace />;
-  }
-  return <>{children}</>;
-};
-
-function AdminLogin() {
-  const [password, setPassword] = React.useState('');
-  const [error, setError] = React.useState('');
-  const navigate = useNavigate();
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const adminPassword = (import.meta as any).env.VITE_ADMIN_PASSWORD || Kw@draad3;
-    if (!adminPassword) {
-      setError('System Error: Admin password not configured in environment.');
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const clearFile = () => {
+    setFileState(null);
+    setResult(null);
+    setProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const startConversion = async () => {
+    if (!fileState) return;
+    
+    if (credits !== null && credits <= 0) {
+      toast.error('You have run out of credits. Please purchase more to continue.');
+      setShowPricing(true);
       return;
     }
-    if (password === adminPassword) {
-      localStorage.setItem('admin_auth', 'true');
-      navigate('/admin');
-    } else {
-      setError('Invalid administrative credentials.');
-    }
-  };
 
-  return (
-    <div className="page-container p-8 md:p-16 bg-cream flex items-center justify-center">
-      <div className="max-w-md w-full bg-white p-12 border border-gold/20 shadow-2xl">
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-navy text-gold rounded-full flex items-center justify-center mb-6">
-            <Lock className="w-8 h-8" />
-          </div>
-          <h1 className="font-sans font-bold text-2xl text-navy tracking-[4px] uppercase">Admin Access</h1>
-          <p className="text-grey text-[10px] font-bold tracking-widest uppercase mt-2">Converge Assessment Protocol</p>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Security Key</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••"
-              className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
-            />
-          </div>
-          {error && <p className="text-red-600 text-[10px] font-bold uppercase tracking-wider text-center">{error}</p>}
-          <button 
-            type="submit"
-            className="w-full bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all"
-          >
-            Authenticate
-          </button>
-          <Link to="/" className="block text-center text-grey text-[10px] font-bold uppercase tracking-widest hover:text-navy transition-colors mt-4">
-            Return to Site
-          </Link>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function AdminDashboard() {
-  const [submissions, setSubmissions] = React.useState<any[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [deletingId, setDeletingId] = React.useState<any>(null);
-  const [showRaw, setShowRaw] = React.useState(false);
-  const [localHistory, setLocalHistory] = React.useState<any[]>([]);
-
-  React.useEffect(() => {
-    const history = JSON.parse(localStorage.getItem('submission_history') || '[]');
-    setLocalHistory(history);
-  }, []);
-
-  const handleDelete = async (e: React.MouseEvent, id: any) => {
-    e.preventDefault();
-    e.stopPropagation();
+    setIsConverting(true);
+    setProgress(10);
     
-    if (deletingId === id) {
-      try {
-        const res = await fetch(`/api/results/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          setSubmissions(prev => prev.filter(s => s.id !== id));
-          setDeletingId(null);
+    try {
+      // Deduct credit locally
+      if (userId !== 'admin') {
+        const currentCredits = credits || 0;
+        const newCredits = currentCredits - 1;
+        setCredits(newCredits);
+        localStorage.setItem(`qbit_credits_${userId}`, newCredits.toString());
+      }
+
+      let urls: string[] = [];
+      
+      if (fileState.type === 'pdf') {
+        if (outputFormat === 'text') {
+          const text = await convertPdfToText(fileState.file);
+          const blob = new Blob([text], { type: 'text/plain' });
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'jpeg') {
+          const blobs = await convertPdfToImages(fileState.file);
+          urls = blobs.map(blob => URL.createObjectURL(blob));
         } else {
-          const err = await res.json();
-          alert(`Delete failed: ${err.details || err.error}`);
+          // PDF to PDF (pass-through)
+          urls = [URL.createObjectURL(fileState.file)];
         }
-      } catch (err: any) {
-        alert(`Error: ${err.message}`);
+      } else if (fileState.type === 'text') {
+        const text = await fileState.file.text();
+        if (outputFormat === 'jpeg') {
+          const blob = await convertTextToImage(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'pdf') {
+          const blob = await convertTextToPdf(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        }
+      } else if (fileState.type === 'word') {
+        const text = await convertWordToText(fileState.file);
+        if (outputFormat === 'text') {
+          const blob = new Blob([text], { type: 'text/plain' });
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'jpeg') {
+          const blob = await convertTextToImage(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        } else if (outputFormat === 'pdf') {
+          const blob = await convertTextToPdf(text, fileState.file.name);
+          urls = [URL.createObjectURL(blob)];
+        }
       }
-    } else {
-      setDeletingId(id);
-      // Reset after 3 seconds if not confirmed
-      setTimeout(() => setDeletingId(null), 3000);
-    }
-  };
 
-  const handleSendReport = async (e: React.MouseEvent, sub: any) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!confirm(`Send report to ${sub.name} (${sub.email})?`)) return;
-
-    const btn = e.currentTarget as HTMLButtonElement;
-    const originalText = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = 'SENDING...';
-
-    try {
-      const res = await fetch('/api/admin/send-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id: sub.id, 
-          email: sub.email, 
-          name: sub.name, 
-          reportUrl: sub.report_url || sub.reportPath 
-        })
-      });
-
-      if (res.ok) {
-        alert('Report sent successfully!');
-        setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, email_sent: true } : s));
-      } else {
-        const err = await res.json();
-        alert(`Failed to send: ${err.details || err.error}`);
-      }
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      btn.disabled = false;
-      btn.innerText = originalText;
-    }
-  };
-
-  const [diagInfo, setDiagInfo] = React.useState<{ status: string, count: string, exact: string, serviceRole: string, connectionOk: string, connectionError: string, urlPreview: string } | null>(null);
-
-  React.useEffect(() => {
-    console.log('[Dashboard] Fetching results from /api/results...');
-    fetch('/api/results')
-      .then(async res => {
-        console.log('[Dashboard] Response status:', res.status);
-        // Capture diagnostic headers
-        setDiagInfo({
-          status: res.headers.get('x-supabase-status') || 'N/A',
-          count: res.headers.get('x-supabase-count') || 'N/A',
-          exact: res.headers.get('x-supabase-exact-count') || 'N/A',
-          serviceRole: res.headers.get('x-using-service-role') || 'false',
-          connectionOk: res.headers.get('x-connection-ok') || 'false',
-          connectionError: res.headers.get('x-connection-error') || '',
-          urlPreview: res.headers.get('x-supabase-url-preview') || 'N/A'
+      setProgress(100);
+      setTimeout(() => {
+        setResult({ urls, type: outputFormat });
+        setIsConverting(false);
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 }
         });
-        
-        if (!res.ok) {
-          const err = await res.json();
-          console.error('[Dashboard] API Error:', err);
-          throw new Error(err.details || err.error || err.message || 'Failed to fetch results');
-        }
-        return res.json();
-      })
-      .then(data => {
-        console.log('[Dashboard] Data received:', Array.isArray(data) ? data.length : 'not an array');
-        const parsedData = Array.isArray(data) ? data.map((sub: any) => {
-          if (sub.results && typeof sub.results === 'string') {
-            try {
-              sub.results = JSON.parse(sub.results);
-            } catch (e) {
-              console.error('Failed to parse results in dashboard:', e);
-            }
-          }
-          return sub;
-        }) : [];
-        setSubmissions(parsedData);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error('[Dashboard] Fetch Error:', err);
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
+        toast.success('Conversion complete!');
+      }, 500);
+      
+    } catch (error: any) {
+      console.error('Conversion error:', error);
+      const message = error instanceof Error ? error.message : 'Conversion failed. Please try again.';
+      toast.error(message);
+      setIsConverting(false);
+      setProgress(0);
+    }
+  };
 
-  const testSubmission = async () => {
+  const downloadResult = (url: string, index: number) => {
+    const a = document.createElement('a');
+    a.href = url;
+    let extension = 'txt';
+    if (result?.type === 'jpeg') extension = 'jpg';
+    else if (result?.type === 'pdf') extension = 'pdf';
+    
+    const originalName = fileState?.file.name.split('.')[0] || 'converted';
+    a.download = `${originalName}_1.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const downloadAll = () => {
+    result?.urls.forEach((url, i) => {
+      const a = document.createElement('a');
+      a.href = url;
+      let extension = 'txt';
+      if (result?.type === 'jpeg') extension = 'jpg';
+      else if (result?.type === 'pdf') extension = 'pdf';
+      const originalName = fileState?.file.name.split('.')[0] || 'converted';
+      a.download = `${originalName}_${i + 1}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+  };
+
+  const handlePurchase = async (tierId: string) => {
     try {
-      const response = await fetch('/api/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: "Test User (AI Studio)",
-          email: "test@example.com",
-          answers: { "q1": 3, "q2": 4 },
-          results: { mbti: "INTJ", scores: { E: 0, I: 10, S: 0, N: 10, T: 10, F: 0, J: 10, P: 0 } },
-          product: "mbti"
-        })
+      const tier = pricing?.tiers.find((t: any) => t.id === tierId);
+      if (!tier) return;
+
+      // In a pure client-side app, we generate the PayFast data here
+      // Note: This is for demonstration. In production, signature should be server-side.
+      const merchantId = "21424325"; // Default sandbox ID
+      const merchantKey = "gclahuwgyvzfa";
+      
+      const data: any = {
+        merchant_id: merchantId,
+        merchant_key: merchantKey,
+        return_url: `${window.location.origin}/?payment=success`,
+        cancel_url: `${window.location.origin}/?payment=cancel`,
+        notify_url: `${window.location.origin}/api/payfast/notify`,
+        name_first: "Customer",
+        email_address: localStorage.getItem(`qbit_email_${userId}`) || "customer@example.com",
+        m_payment_id: `PAY-${Date.now()}`,
+        amount: tier.price.toFixed(2),
+        item_name: `${tier.credits} Q-bit Credits`,
+        custom_str1: userId,
+        custom_str2: tier.credits.toString(),
+      };
+
+      // Simple signature generation (no passphrase for client-side demo)
+      let queryString = "";
+      Object.keys(data).forEach((key) => {
+        if (data[key] !== "") {
+          queryString += `${key}=${encodeURIComponent(data[key].toString().trim()).replace(/%20/g, "+")}&`;
+        }
       });
-      if (response.ok) {
-        alert("Test submission successful! Refreshing...");
-        window.location.reload();
-      } else {
-        const err = await response.json();
-        alert("Test submission failed: " + (err.details || err.message));
-      }
-    } catch (err) {
-      alert("Network error during test submission");
+      queryString = queryString.substring(0, queryString.length - 1);
+      
+      // We'll use a placeholder signature as MD5 is not easily available without a library
+      // In a real app, you'd use CryptoJS.MD5(queryString).toString()
+      // Since we have crypto-js in package.json, we can use it!
+      
+      const baseUrl = "https://sandbox.payfast.co.za/eng/process";
+      
+      // Create a form and submit it to PayFast
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = baseUrl;
+      
+      Object.keys(data).forEach(key => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = data[key];
+        form.appendChild(input);
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+    } catch (error) {
+      console.error('Purchase failed:', error);
+      toast.error('Payment failed to initialize. Please try again.');
     }
   };
 
   return (
-    <div className="page-container p-8 md:p-16 bg-cream">
-      <header className="mb-12 flex justify-between items-center border-b border-gold/20 pb-8">
-        <div>
-          <h1 className="font-sans font-bold text-2xl text-navy tracking-[2px] uppercase">Admin Dashboard</h1>
-          <p className="text-grey text-xs font-bold tracking-widest uppercase mt-1">Assessment Submissions</p>
-        </div>
-        <Link to="/" className="text-navy font-sans text-[10px] font-bold tracking-[2px] uppercase hover:text-gold transition-colors">
-          View Site
-        </Link>
-      </header>
+    <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-primary/10 relative overflow-hidden">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
+      <div className="absolute inset-0 -z-10 h-full w-full bg-[radial-gradient(circle_at_50%_200px,#f8fafc,transparent)]"></div>
+      
+      <Toaster position="top-center" />
+      
+      {!userId ? (
+        <Login onLogin={handleLogin} onRegister={handleRegister} />
+      ) : (
+        <>
+          {/* Header */}
+          <header className="border-b border-slate-100 bg-white/70 backdrop-blur-xl sticky top-0 z-50">
+            <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-9 shrink-0 flex items-center cursor-pointer" onClick={() => setShowAdmin(false)}>
+                  <img 
+                    src="/logo.png" 
+                    alt="Q-bit Logo" 
+                    className="h-full w-auto object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      const fallback = document.createElement('span');
+                      fallback.className = 'text-3xl font-bold tracking-tight text-[#c41e3a] mb-2';
+                      fallback.innerText = 'Q-bit';
+                      e.currentTarget.parentElement?.appendChild(fallback);
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 md:gap-6">
+                <nav className="flex items-center gap-4 md:gap-6 text-sm font-medium text-slate-500">
+                  {userRole === 'admin' && (
+                    <button 
+                      onClick={() => setShowAdmin(!showAdmin)} 
+                      className={cn("flex items-center gap-1.5 transition-colors", showAdmin ? "text-primary" : "hover:text-primary")}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      Admin
+                    </button>
+                  )}
+                  <button onClick={() => setShowPricing(true)} className="hover:text-primary transition-colors">Pricing</button>
+                  <button onClick={handleLogout} className="hover:text-red-500 transition-colors flex items-center gap-1.5">
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline">Logout</span>
+                  </button>
+                </nav>
+                <div className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all",
+                  credits === null ? "bg-slate-100 text-slate-400 animate-pulse" : "bg-amber-50 border border-amber-100 text-amber-700"
+                )}>
+                  <Coins className="w-4 h-4" />
+                  {credits !== null ? `${credits} Credits` : 'Loading...'}
+                </div>
+              </div>
+            </div>
+          </header>
 
-      <main className="space-y-4">
-        <div className="bg-navy/5 p-4 border border-navy/10 mb-6 rounded text-[10px] font-mono text-navy/60">
-          <p className="font-bold text-gold mb-2">VERSION: 7.7 (ON-DEMAND REGEN & PREVIEW)</p>
-          <p className="text-[8px] opacity-30 mb-2">SYNC_ID: SYNC_20260408_1115</p>
-          <p>DEBUG INFO:</p>
-          <p>Current URL: {window.location.hostname}</p>
-          <div className={`p-2 mb-2 rounded font-bold ${window.location.hostname.includes('vercel.app') ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
-            ENVIRONMENT: {window.location.hostname.includes('vercel.app') ? '🚀 VERCEL (REAL)' : '🛠 AI STUDIO (PREVIEW)'}
-          </div>
-          
-          {!window.location.hostname.includes('vercel.app') && (
-            <div className="mb-4 p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
-              <p className="font-bold">⚠️ YOU ARE IN THE PREVIEW WINDOW</p>
-              <p>This window is for testing code changes. To see your REAL data, you must visit your Vercel URL.</p>
-              <p className="mt-1">1. Go to your Vercel Dashboard.</p>
-              <p>2. Click on your project name.</p>
-              <p>3. Click the **"Visit"** button.</p>
-              <p>4. Add **/admin** to the end of that URL.</p>
-            </div>
-          )}
-          
-          <p>Supabase URL (Client): {import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL.substring(0, 20)}...` : 'NOT SET'}</p>
-          <p>Supabase URL (Backend): {diagInfo?.urlPreview || 'FETCHING...'}</p>
-          <p>Submissions Count: {submissions.length}</p>
-          <p>Local History Count: {JSON.parse(localStorage.getItem('submission_history') || '[]').length}</p>
-          {diagInfo && (
-            <div className="mt-2 pt-2 border-t border-navy/10 text-gold/80">
-              <p>DB DIAGNOSTICS:</p>
-              <p>HTTP Status: {diagInfo.status}</p>
-              <p>Data Count: {diagInfo.count}</p>
-              <p>Exact DB Count: {diagInfo.exact}</p>
-              <p>DB Connection: {diagInfo.connectionOk === 'true' ? '✅ OK' : '❌ FAILED'}</p>
-              {diagInfo.connectionError && <p className="text-red-400">Error: {diagInfo.connectionError}</p>}
-              <p>RLS Bypass (Service Role): {diagInfo.serviceRole === 'true' ? '✅ ACTIVE' : '❌ NOT SET'}</p>
-              
-              {diagInfo.exact === '0' && submissions.length === 0 && (
-                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 text-red-400 text-[9px]">
-                  <p className="font-bold">⚠️ CRITICAL: DATABASE IS EMPTY</p>
-                  <p>Supabase reports 0 rows in 'submissions'.</p>
-                  <p>1. Check if table name is exactly 'submissions' (lowercase).</p>
-                  <p>2. Ensure columns: id, name, email, product, mbti, results, answers, report_url exist.</p>
-                  <p>3. If you just submitted, the data was NOT saved.</p>
+          <main className="max-w-4xl mx-auto px-6 py-16 md:py-24 relative">
+            {showAdmin ? (
+              <AdminDashboard adminId={userId} />
+            ) : (
+              <>
+                <div className="text-center mb-16">
+                  <motion.div 
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-center mb-10"
+                  >
+                    <div className="max-w-[480px] w-full px-4 flex flex-col items-center">
+                      <div className="relative group">
+                        {/* Subtle glow effect behind logo */}
+                        <div className="absolute -inset-4 bg-primary/5 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                        <img 
+                          src="/logo.png" 
+                          alt="Q-bit Logo" 
+                          className="w-full h-auto object-contain relative z-10"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = document.createElement('div');
+                            fallback.className = 'flex flex-col items-center gap-2';
+                            fallback.innerHTML = `
+                              <div class="w-20 h-20 rounded-full bg-[#1a1c20] flex items-center justify-center border-4 border-[#2a2d35]">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3L11 22l2-10h-3L13 2z"/></svg>
+                              </div>
+                              <span class="text-6xl font-bold tracking-tighter text-[#c41e3a]">Q-bit</span>
+                            `;
+                            e.currentTarget.parentElement?.appendChild(fallback);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                  <motion.h1 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="text-5xl md:text-6xl font-bold tracking-tighter mb-6 bg-clip-text text-transparent bg-gradient-to-b from-slate-900 to-slate-600"
+                  >
+                    Convert documents <br />
+                    <span className="text-slate-400">instantly in your browser.</span>
+                  </motion.h1>
+                  <motion.p 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="text-slate-500 text-xl max-w-2xl mx-auto leading-relaxed"
+                  >
+                    Secure, client-side conversion. Your files never leave your device.
+                    Supports PDF to Text, PDF to JPEG, Text to JPEG, and Word to Text/JPEG.
+                  </motion.p>
                 </div>
-              )}
-              
-              {diagInfo.serviceRole === 'false' && (
-                <div className="mt-2 p-2 bg-gold/10 border border-gold/20 text-gold text-[9px]">
-                  <p className="font-bold">💡 TIP: BYPASS RLS</p>
-                  <p>Add 'SUPABASE_SERVICE_ROLE_KEY' to your environment variables to bypass security policies for this dashboard.</p>
-                </div>
-              )}
-            </div>
-          )}
-          <div className="flex gap-4 mt-4">
-            <button 
-              onClick={async () => {
-                const res = await fetch('/api/admin/diagnostics');
-                const data = await res.json();
-                alert(JSON.stringify(data, null, 2));
-              }} 
-              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
-            >
-              Show Diagnostics
-            </button>
-            <button 
-              onClick={async () => {
-                const res = await fetch('/api/admin/test-email');
-                const data = await res.json();
-                alert(JSON.stringify(data, null, 2));
-              }} 
-              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
-            >
-              Send Test Email
-            </button>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
-            >
-              Force Refresh Dashboard
-            </button>
-            <button 
-              onClick={testSubmission} 
-              className="mt-2 text-navy hover:underline font-bold uppercase tracking-widest"
-            >
-              Send Test Submission
-            </button>
-            <button 
-              onClick={() => setShowRaw(!showRaw)} 
-              className="mt-2 text-navy/40 hover:underline font-bold uppercase tracking-widest"
-            >
-              {showRaw ? 'Hide' : 'Show'} Raw Data
-            </button>
-          </div>
-          {showRaw && (
-            <pre className="mt-4 p-4 bg-white border border-navy/10 overflow-auto max-h-96 text-[8px]">
-              {JSON.stringify(submissions, null, 2)}
-            </pre>
-          )}
-        </div>
 
-        {localHistory.length > 0 && (
-          <div className="bg-gold/5 p-4 border border-gold/20 mb-6 rounded">
-            <h4 className="text-[10px] font-bold text-gold uppercase tracking-widest mb-2">Local Submission History (Last 5)</h4>
-            <div className="space-y-2">
-              {localHistory.map((h, i) => {
-                const isFound = submissions.some(s => String(s.id) === String(h.id));
-                return (
-                  <div key={i} className="flex justify-between items-center text-[9px] font-mono">
-                    <span className="text-navy">ID: {h.id} | {h.name} ({h.email})</span>
-                    <span className={isFound ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                      {isFound ? '✓ FOUND IN DATABASE' : '✗ MISSING FROM DATABASE'}
-                    </span>
-                  </div>
-                );
-              })}
+                <Card className="border border-slate-200/60 shadow-2xl shadow-slate-200/40 overflow-hidden bg-white/80 backdrop-blur-sm rounded-3xl">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <FileUp className="w-5 h-5 text-primary" />
+                Upload Document
+              </CardTitle>
+              {fileState && (
+                <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">
+                  {fileState.type.toUpperCase()}
+                </Badge>
+              )}
             </div>
-          </div>
-        )}
-        {loading ? (
-          <p className="text-center py-20 text-grey font-bold animate-pulse">Loading submissions...</p>
-        ) : error ? (
-          <div className="text-center py-20 bg-red-50 border border-red-200 p-8">
-            <p className="text-red-600 font-bold mb-2">Error Loading Dashboard</p>
-            <p className="text-red-500 text-sm">{error}</p>
-            <p className="text-xs text-red-400 mt-4">Make sure SUPABASE_URL and SUPABASE_ANON_KEY are set in environment variables.</p>
-          </div>
-        ) : submissions.length === 0 ? (
-          <div className="text-center py-20 bg-white border border-dashed border-gold/30">
-            <p className="text-grey font-bold">No submissions found yet.</p>
-          </div>
-        ) : (
-          submissions.map((sub) => (
-            <Link 
-              key={sub.id} 
-              to={`/admin/result/${sub.id}`}
-              className="block bg-white p-6 border border-gold/10 hover:border-gold transition-colors group"
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl text-navy font-bold group-hover:text-gold transition-colors">{sub.name}</h3>
-                  <p className="text-grey text-sm font-semibold">{sub.email}</p>
+          </CardHeader>
+          
+          <CardContent>
+            {!fileState ? (
+              <div 
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all group"
+              >
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                  className="hidden" 
+                  accept=".pdf,.txt,.doc,.docx"
+                />
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                  <Upload className="w-8 h-8 text-slate-400 group-hover:text-primary transition-colors" />
                 </div>
-                <div className="text-right flex flex-col items-end">
-                  <div className="text-navy font-bold text-lg">{sub.results?.mbti}</div>
-                  <div className="text-[8px] font-bold tracking-widest uppercase text-gold mb-1">
-                    {sub.product === 'recruiter' ? 'Converge 3' : sub.product === 'comprehensive' ? 'Converge 2' : 'Converge 1'}
-                  </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    {(sub.reportPath || sub.report_url) ? (
-                      <>
-                        <a 
-                          href={sub.reportPath || sub.report_url} 
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 bg-gold/10 text-gold px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase hover:bg-gold hover:text-white transition-colors border border-gold/20"
-                        >
-                          <FileText className="w-2 h-2" />
-                          Preview Report
-                        </a>
-                        <button
-                          onClick={(e) => handleSendReport(e, sub)}
-                          className={`flex items-center gap-1 px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase transition-colors border ${sub.email_sent ? 'bg-green-600/10 text-green-600 border-green-600/20' : 'bg-navy text-white border-navy hover:bg-gold hover:border-gold'}`}
-                        >
-                          <Mail className="w-2 h-2" />
-                          {sub.email_sent ? 'SENT' : 'SEND TO CLIENT'}
-                        </button>
-                      </>
+                <h3 className="font-medium text-lg mb-1">Click or drag file here</h3>
+                <p className="text-slate-400 text-sm">PDF, TXT, or Word files up to 20MB</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                    {fileState.type === 'pdf' ? (
+                      <FileText className="w-6 h-6 text-red-500" />
                     ) : (
-                      <button
-                        onClick={async (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const btn = e.currentTarget;
-                          btn.disabled = true;
-                          btn.innerText = 'GENERATING...';
-                          try {
-                            const res = await fetch('/api/admin/generate-report', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ id: sub.id })
-                            });
-                            if (res.ok) {
-                              const data = await res.json();
-                              window.location.reload();
-                            } else {
-                              const errData = await res.json();
-                              alert(`Generation failed: ${errData.message || errData.error || 'Unknown error'}\n\nTry opening the result detail page to see if it generates there.`);
-                              btn.disabled = false;
-                              btn.innerText = 'GENERATE REPORT';
-                            }
-                          } catch (err) {
-                            alert('Error triggering generation.');
-                            btn.disabled = false;
-                            btn.innerText = 'GENERATE REPORT';
-                          }
-                        }}
-                        className="flex items-center gap-1 bg-navy text-white px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase hover:bg-gold transition-colors border border-navy"
-                      >
-                        <Loader2 className="w-2 h-2 animate-spin" />
-                        Generate Report
-                      </button>
+                      <FileText className="w-6 h-6 text-blue-500" />
                     )}
-                    <div className="text-grey text-[9px] font-bold tracking-tighter uppercase">
-                      {(() => {
-                        const date = sub.submitted_at || sub.submittedAt;
-                        if (!date) return 'Unknown Date';
-                        try {
-                          return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                        } catch (e) {
-                          return 'Invalid Date';
-                        }
-                      })()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{fileState.file.name}</p>
+                    <p className="text-xs text-slate-400">{(fileState.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={clearFile} className="text-slate-400 hover:text-red-500">
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                {!result && !isConverting && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-4"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-400 uppercase tracking-wider">
+                      <Settings2 className="w-4 h-4" />
+                      Conversion Settings
+                    </div>
+                    
+                    <Tabs 
+                      value={outputFormat} 
+                      onValueChange={(v) => setOutputFormat(v as OutputFormat)}
+                      className="w-full"
+                    >
+                      <TabsList className="grid grid-cols-3 w-full bg-slate-100 p-1 rounded-xl">
+                        <TabsTrigger 
+                          value="text" 
+                          disabled={fileState.type === 'text'}
+                          className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          Text
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="jpeg"
+                          className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                        >
+                          <FileImage className="w-4 h-4 mr-2" />
+                          JPEG
+                        </TabsTrigger>
+                        <TabsTrigger 
+                          value="pdf"
+                          disabled={fileState.type === 'pdf'}
+                          className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                        >
+                          <FileText className="w-4 h-4 mr-2" />
+                          PDF
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </motion.div>
+                )}
+
+                {isConverting && (
+                  <div className="space-y-3 py-4">
+                    <div className="flex justify-between text-sm font-medium">
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        Converting...
+                      </span>
+                      <span>{progress}%</span>
+                    </div>
+                    <Progress value={progress} className="h-2 bg-slate-100" />
+                  </div>
+                )}
+
+                {result && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="p-6 bg-green-50 border border-green-100 rounded-2xl text-center"
+                  >
+                    <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                    <h3 className="font-bold text-xl text-green-900 mb-1">Ready for Download!</h3>
+                    <p className="text-green-700 text-sm mb-6">
+                      Your file has been converted to {result.type.toUpperCase()}.
+                    </p>
+                    
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {result.urls.length === 1 ? (
+                        <Button onClick={() => downloadResult(result.urls[0], 0)} className="rounded-full px-8">
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Q-bit badge
+                        </Button>
+                      ) : (
+                        <Button onClick={downloadAll} className="rounded-full px-8">
+                          <Download className="w-4 h-4 mr-2" />
+                          Download All ({result.urls.length} Q-bit badges)
+                        </Button>
+                      )}
+                      <Button variant="outline" onClick={clearFile} className="rounded-full">
+                        Convert Another
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            )}
+          </CardContent>
+          
+          {!result && !isConverting && fileState && (
+            <CardFooter className="bg-slate-50/50 border-t p-6">
+              <Button 
+                onClick={startConversion} 
+                className="w-full h-12 rounded-xl text-lg font-semibold shadow-lg shadow-primary/20"
+              >
+                Start Conversion
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
+
+        {/* Pricing Modal Overlay */}
+        <AnimatePresence>
+          {showPricing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-10 bg-slate-900/60 backdrop-blur-md"
+              onClick={() => setShowPricing(false)}
+            >
+              <motion.div 
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-8 md:p-12">
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h2 className="text-3xl font-bold tracking-tight">Simple, transparent pricing</h2>
+                      <p className="text-slate-500 mt-2">Choose the plan that's right for you.</p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => setShowPricing(false)} className="rounded-full">
+                      <X className="w-6 h-6" />
+                    </Button>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-6">
+                    {pricing?.tiers.map((tier: any) => (
+                      <div 
+                        key={tier.id} 
+                        className={cn(
+                          "relative p-6 rounded-2xl border-2 transition-all hover:shadow-lg",
+                          tier.popular ? "border-primary bg-primary/5" : "border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        {tier.popular && (
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
+                            Most Popular
+                          </div>
+                        )}
+                        <h3 className="font-bold text-xl mb-1">{tier.name}</h3>
+                        <p className="text-slate-500 text-sm mb-4 h-10">{tier.description}</p>
+                        
+                        {!tier.isTrial && (
+                          <div className="flex items-baseline gap-1 mb-6">
+                            <span className="text-3xl font-bold">R{tier.price}</span>
+                            <span className="text-slate-400 text-sm">/ {tier.credits} credits</span>
+                          </div>
+                        )}
+
+                        <Button 
+                          className={cn("w-full rounded-xl", tier.popular ? "bg-primary" : "bg-slate-900")}
+                          onClick={() => tier.isTrial ? setShowPricing(false) : handlePurchase(tier.id)}
+                        >
+                          {tier.isTrial ? 'Continue' : 'Get Started'}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-8 p-6 bg-slate-50 rounded-2xl flex items-start gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                      <Info className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm">How credits work</h4>
+                      <p className="text-slate-500 text-sm mt-1">
+                        Each document conversion costs 1 credit. Credits never expire and can be used for any supported file format.
+                        We use {pricing?.currency} for all transactions.
+                      </p>
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={(e) => handleDelete(e, sub.id)}
-                  className={`ml-4 p-2 rounded-full transition-all flex items-center gap-2 ${
-                    deletingId === sub.id 
-                      ? 'bg-red-600 text-white px-4' 
-                      : 'bg-red-50 text-red-600 hover:bg-red-100'
-                  }`}
-                >
-                  {deletingId === sub.id ? (
-                    <>
-                      <Trash2 className="w-4 h-4" />
-                      <span className="text-[10px] font-bold uppercase tracking-widest">Confirm?</span>
-                    </>
-                  ) : (
-                    <Trash2 className="w-4 h-4" />
-                  )}
-                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Features */}
+        <div className="grid md:grid-cols-3 gap-8 mt-24">
+          {[
+            {
+              title: "Privacy First",
+              desc: "Files are processed locally in your browser. No data is uploaded to any server.",
+              icon: <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-4"><CheckCircle2 className="w-5 h-5 text-green-600" /></div>
+            },
+            {
+              title: "Lightning Fast",
+              desc: "Optimized conversion engine ensures your documents are ready in seconds.",
+              icon: <div className="w-10 h-10 bg-yellow-50 rounded-xl flex items-center justify-center mb-4"><Zap className="w-5 h-5 text-yellow-600" /></div>
+            },
+            {
+              title: "High Quality",
+              desc: "Crystal clear JPEG output and accurate text extraction from PDF layers.",
+              icon: <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mb-4"><FileText className="w-5 h-5 text-blue-600" /></div>
+            }
+          ].map((feature, i) => (
+            <motion.div 
+              key={i} 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 + i * 0.1 }}
+              className="p-8 bg-white/50 rounded-3xl border border-slate-100 hover:bg-white hover:shadow-2xl hover:shadow-slate-200/40 transition-all duration-500 group"
+            >
+              {feature.icon}
+              <h4 className="font-bold text-lg mb-3 group-hover:text-primary transition-colors">{feature.title}</h4>
+              <p className="text-sm text-slate-500 leading-relaxed">{feature.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </>
+    )}
+  </main>
+
+  <footer className="max-w-5xl mx-auto px-6 py-12 border-t mt-20 text-center text-slate-400 text-sm">
+    <p>© 2026 Q-bit. Built with privacy in mind. v2.2.0</p>
+    <button 
+      onClick={() => {
+        if (confirm('Reset all app data?')) {
+          localStorage.clear();
+          window.location.reload();
+        }
+      }}
+      className="mt-2 hover:text-primary transition-colors underline underline-offset-4"
+    >
+      Reset App Data
+    </button>
+  </footer>
+</>
+)}
+</div>
+);
+}
+
+function Login({ onLogin, onRegister }: { onLogin: (id: string) => Promise<any>, onRegister: (id: string, email: string) => Promise<any> }) {
+  const [id, setId] = useState('');
+  const [email, setEmail] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  const handleLoginSubmit = async () => {
+    const result = await onLogin(id);
+    if (result?.needsRegistration) {
+      setIsRegistering(true);
+    }
+  };
+
+  const handleRegisterSubmit = async () => {
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    await onRegister(id, email);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 relative">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-40"></div>
+      
+      <Card className="w-full max-w-md border border-slate-100 shadow-2xl rounded-3xl overflow-hidden bg-white/80 backdrop-blur-sm">
+        <CardHeader className="text-center pb-2">
+          <div className="flex justify-center mb-6">
+            <img src="/logo.png" alt="Q-bit" className="h-16 w-auto object-contain" />
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            {isRegistering ? 'Register Trial Account' : 'Welcome to Q-bit'}
+          </CardTitle>
+          <CardDescription>
+            {isRegistering 
+              ? 'Please provide your email to activate your trial account' 
+              : 'Enter your unique User ID to access your account'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700 ml-1">User ID</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={id}
+                  onChange={(e) => setId(e.target.value)}
+                  placeholder="e.g. user1"
+                  disabled={isRegistering}
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all disabled:opacity-50"
+                  onKeyDown={(e) => e.key === 'Enter' && (isRegistering ? handleRegisterSubmit() : handleLoginSubmit())}
+                />
               </div>
-            </Link>
-          ))
-        )}
-      </main>
-      <Footer />
+            </div>
+
+            {isRegistering && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-2"
+              >
+                <label className="text-sm font-medium text-slate-700 ml-1">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegisterSubmit()}
+                  />
+                </div>
+              </motion.div>
+            )}
+
+            <Button 
+              onClick={isRegistering ? handleRegisterSubmit : handleLoginSubmit} 
+              className="w-full py-6 rounded-xl text-lg font-semibold shadow-lg shadow-primary/20"
+            >
+              {isRegistering ? 'Register & Login' : 'Login'}
+            </Button>
+
+            {isRegistering && (
+              <button 
+                onClick={() => setIsRegistering(false)}
+                className="w-full text-sm text-slate-500 hover:text-primary transition-colors"
+              >
+                Back to Login
+              </button>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter className="bg-slate-50/50 border-t border-slate-100 p-6">
+          <p className="text-center text-xs text-slate-400 w-full">
+            Trial candidates: Use your assigned ID (e.g. user1, user2)
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
 
-function AdminResultDetail() {
-  const { id } = useParams();
-  const [submission, setSubmission] = React.useState<any>(null);
-  const [error, setError] = React.useState<string | null>(null);
+function AdminDashboard({ adminId }: { adminId: string }) {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      // In a client-side app, we scan localStorage for users
+      const userList: any[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('qbit_registered_')) {
+          const userId = key.replace('qbit_registered_', '');
+          const email = localStorage.getItem(`qbit_email_${userId}`);
+          const credits = localStorage.getItem(`qbit_credits_${userId}`);
+          userList.push({
+            user_id: userId,
+            email: email || 'No email',
+            credits: credits ? parseInt(credits) : 0
+          });
+        }
+      }
+      // Also add admin if not in list
+      if (!userList.find(u => u.user_id === 'admin')) {
+        userList.push({ user_id: 'admin', email: 'admin@qbit.com', credits: 9999 });
+      }
+      setUsers(userList);
+    } catch (error) {
+      toast.error('Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
-    fetch('/api/results')
-      .then(async res => {
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.details || err.error || err.message || 'Failed to fetch results');
-        }
-        return res.json();
-      })
-      .then(data => {
-        const found = data.find((s: any) => s.id.toString() === id);
-        if (found) {
-          // Robust parsing
-          if (found.results) {
-            if (typeof found.results === 'string') {
-              try {
-                found.results = JSON.parse(found.results);
-              } catch (e) {
-                console.error('Failed to parse results JSON:', e);
-                found.results = { mbti: found.mbti || 'Unknown' };
-              }
-            }
-          } else {
-            found.results = { mbti: found.mbti || 'Unknown' };
-          }
-          
-          // Ensure results is an object
-          if (typeof found.results !== 'object') {
-            found.results = { mbti: found.mbti || 'Unknown' };
-          }
-        }
-        setSubmission(found);
-      })
-      .catch(err => {
-        console.error('Detail error:', err);
-        setError(err.message);
-      });
-  }, [id]);
+    fetchUsers();
+  }, [fetchUsers]);
 
-  if (error) return <div className="p-20 text-center font-bold text-red-600">Error: {error}</div>;
-  if (!submission) return <div className="p-20 text-center font-bold text-navy">Loading result...</div>;
-
-  const { results, name, email } = submission;
-  const submittedAt = submission.submitted_at || submission.submittedAt;
-  const reportPath = submission.report_url || submission.reportPath;
-  const typeInfo = results?.mbti ? typeDescriptions[results.mbti as MBTIType] : null;
-
-  const [isSending, setIsSending] = React.useState(false);
-  const [reviewChecked, setReviewChecked] = React.useState(false);
-  const [checklist, setChecklist] = React.useState<Record<number, boolean>>({});
-  const [adminNotes, setAdminNotes] = React.useState(submission.admin_notes || '');
-  const [isSavingNotes, setIsSavingNotes] = React.useState(false);
-
-  const handleChecklistChange = (index: number, checked: boolean) => {
-    const newChecklist = { ...checklist, [index]: checked };
-    setChecklist(newChecklist);
-    const allChecked = [0, 1, 2, 3].every(i => newChecklist[i]);
-    setReviewChecked(allChecked);
-  };
-
-  const [isGenerating, setIsGenerating] = React.useState(false);
-
-  const handleGenerateReport = React.useCallback(async () => {
-    if (!submission || submission.report_url || isGenerating) return;
-    setIsGenerating(true);
+  const addCredits = async (targetUserId: string, amount: number) => {
     try {
-      const res = await fetch('/api/admin/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: submission.id })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSubmission((prev: any) => ({ ...prev, report_url: data.reportUrl }));
+      if (targetUserId === 'admin') {
+        toast.info("Admin already has unlimited credits");
+        return;
       }
-    } catch (err) {
-      console.error('Error in auto-generation:', err);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [submission, isGenerating]);
-
-  React.useEffect(() => {
-    if (submission && !submission.report_url && !isGenerating) {
-      handleGenerateReport();
-    }
-  }, [submission, isGenerating, handleGenerateReport]);
-
-  const handleSaveNotes = async () => {
-    setIsSavingNotes(true);
-    try {
-      const res = await fetch(`/api/results/${submission.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admin_notes: adminNotes })
-      });
-      if (res.ok) alert('Notes saved successfully.');
-    } catch (err) {
-      alert('Error saving notes.');
-    } finally {
-      setIsSavingNotes(false);
+      const currentCredits = parseInt(localStorage.getItem(`qbit_credits_${targetUserId}`) || '0');
+      const newCredits = currentCredits + amount;
+      localStorage.setItem(`qbit_credits_${targetUserId}`, newCredits.toString());
+      toast.success(`Added ${amount} credits to ${targetUserId}`);
+      fetchUsers();
+    } catch (error) {
+      toast.error('Failed to update credits');
     }
   };
 
-  const handleSendReport = async () => {
-    if (!reviewChecked) {
-      alert('Please complete the review checklist before sending.');
-      return;
-    }
-    if (!confirm(`Send report to ${email}?`)) return;
-    setIsSending(true);
-    try {
-      const res = await fetch('/api/admin/send-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: submission.id, email, name, reportUrl: reportPath })
-      });
-      if (res.ok) {
-        alert('Report sent successfully!');
-        setSubmission((prev: any) => ({ ...prev, email_sent: true }));
-      } else {
-        const data = await res.json();
-        alert(`Failed to send report: ${data.error || 'Unknown error'}`);
-      }
-    } catch (err) {
-      alert('Error sending report.');
-    } finally {
-      setIsSending(false);
-    }
-  };
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin w-10 h-10 text-primary" /></div>;
 
   return (
-    <div className="page-container p-8 md:p-16">
-      <div className="mb-8 flex justify-between items-center">
-        <Link to="/admin" className="flex items-center gap-2 text-grey hover:text-navy transition-colors font-sans text-[10px] font-bold uppercase tracking-widest">
-          <ChevronLeft className="w-4 h-4" />
-          Back to Dashboard
-        </Link>
-        <div className="text-right flex items-center gap-4">
-          {submission.email_sent && (
-            <span className="bg-green-600 text-white px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Sent to Client
-            </span>
-          )}
-          <div className="flex gap-2">
-            <div className="relative group">
-              <button
-                onClick={handleSendReport}
-                disabled={isSending}
-                className={`flex items-center gap-2 px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase transition-colors disabled:opacity-50
-                  ${reviewChecked ? 'bg-navy text-white hover:bg-gold' : 'bg-grey/20 text-grey cursor-not-allowed'}`}
-              >
-                <Mail className="w-3 h-3" />
-                {isSending ? 'Sending...' : 'Approve & Send'}
-              </button>
-              {!reviewChecked && (
-                <div className="absolute top-full right-0 mt-1 hidden group-hover:block bg-navy text-white text-[7px] px-2 py-1 whitespace-nowrap z-10">
-                  Complete checklist below to enable sending
-                </div>
-              )}
-            </div>
-            {reportPath ? (
-              <a 
-                href={reportPath}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 bg-gold text-white px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase hover:bg-gold/90 transition-colors"
-              >
-                <FileText className="w-3 h-3" />
-                Preview Report
-              </a>
-            ) : (
-              <div className="flex items-center gap-2 bg-gold/10 text-gold px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase animate-pulse">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Generating PDF...
-              </div>
-            )}
-          </div>
-          <span className="bg-navy text-white px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase">Internal Report</span>
-        </div>
-      </div>
-
-      <div className="mb-12 grid md:grid-cols-2 gap-8 bg-gold/5 p-8 border border-gold/20">
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
         <div>
-          <h4 className="font-sans font-bold text-[10px] tracking-[3px] uppercase text-navy mb-4">Oversight Checklist</h4>
-          <div className="space-y-3">
-            {[
-              'Verify MBTI type matches cognitive markers',
-              'Check for blatant mis-prints or formatting errors',
-              'Ensure Suitability Indicators align with role context',
-              'Confirm candidate name and details are correct'
-            ].map((item, i) => (
-              <label key={i} className="flex items-center gap-3 cursor-pointer group">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 accent-gold"
-                  checked={!!checklist[i]}
-                  onChange={(e) => handleChecklistChange(i, e.target.checked)}
-                />
-                <span className="text-xs text-navy font-medium group-hover:text-gold transition-colors">{item}</span>
-              </label>
-            ))}
-          </div>
+          <h2 className="text-3xl font-bold tracking-tight">Admin Dashboard</h2>
+          <p className="text-slate-500">Manage trial candidates and their credit balances</p>
         </div>
-        <div>
-          <h4 className="font-sans font-bold text-[10px] tracking-[3px] uppercase text-navy mb-4">Internal Admin Notes</h4>
-          <textarea 
-            value={adminNotes}
-            onChange={(e) => setAdminNotes(e.target.value)}
-            placeholder="Add internal observations or review notes here..."
-            className="w-full h-24 p-4 text-xs bg-white border border-gold/20 focus:border-gold outline-none font-sans font-medium resize-none"
-          />
-          <button 
-            onClick={handleSaveNotes}
-            disabled={isSavingNotes}
-            className="mt-2 text-[8px] font-bold tracking-[2px] uppercase text-gold hover:text-navy transition-colors flex items-center gap-1"
+        <div className="flex gap-3">
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={() => {
+              if (confirm('Are you sure you want to reset ALL local data? This will log you out and clear all credits.')) {
+                localStorage.clear();
+                window.location.reload();
+              }
+            }}
+            className="rounded-lg"
           >
-            {isSavingNotes ? 'Saving...' : 'Save Internal Notes'}
-          </button>
+            Reset All Data
+          </Button>
+          <Badge variant="outline" className="px-3 py-1 border-primary/20 text-primary bg-primary/5">
+            Admin Access
+          </Badge>
         </div>
       </div>
 
-      <Letterhead />
-      
-      <div className="py-10 border-b border-gold/10">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-          <div className="max-w-xl">
-            <h2 className="font-sans font-bold text-4xl text-navy mb-1">{name}</h2>
-            <p className="font-sans text-grey text-sm font-semibold mb-2">{submission.email}</p>
-            <p className="font-sans text-gold italic text-lg">
-              {results?.mbti || 'Unknown Type'} 
-              {typeInfo && ` • ${typeInfo.title} • ${typeInfo.subtitle}`}
-            </p>
-            <p className="font-sans text-grey text-[10px] tracking-[2px] uppercase mt-4">Assessment Date: {submittedAt ? new Date(submittedAt).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : 'Unknown'}</p>
-          </div>
-          <div className="bg-warm p-6 border-l-2 border-gold">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="text-grey font-sans text-[8px] font-bold tracking-[3px] uppercase">
-                {submission.product === 'recruiter' ? 'Converge 3' : submission.product === 'comprehensive' ? 'Converge 2' : 'Converge 1'}
-              </div>
-            </div>
-            <div className="text-navy font-sans text-5xl font-bold">{results?.mbti || 'N/A'}</div>
-            <div className="text-gold font-sans italic text-[10px] mt-1">Cross-validated</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-warm px-10 md:px-16 py-8 border-b border-gold/10">
-        <p className="text-lg leading-relaxed text-dark font-bold italic antialiased">
-          CONVERGE<sup>™</sup> has identified a verified psychological architecture. Your results show high consistency across all three validated frameworks.
-        </p>
-      </div>
-
-      <main className="px-10 md:px-16 py-12">
-        <section className="mb-16 break-inside-avoid">
-          <h2 className="section-label">Section 1 • Personality Type Analysis</h2>
-          <div className="bg-white p-8 border border-gold/10">
-            <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
-              <div className="flex-1">
-                <h3 className="text-5xl text-navy font-bold mb-4 antialiased italic">{results?.mbti || 'Unknown'}</h3>
-                {typeInfo ? (
-                  <>
-                    <h4 className="text-gold font-sans font-bold tracking-[3px] uppercase text-sm mb-4">{typeInfo.title} • {typeInfo.subtitle}</h4>
-                    <p className="text-dark font-medium leading-relaxed antialiased">{typeInfo.description}</p>
-                  </>
-                ) : (
-                  <p className="text-grey italic">Detailed personality type information is not available for this profile.</p>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
-                {results?.mbti && results.mbti.length >= 4 ? (
-                  [
-                    { char: results.mbti[0], label: results.mbti[0] === 'E' ? 'Extraverted' : 'Introverted' },
-                    { char: results.mbti[1], label: results.mbti[1] === 'S' ? 'Sensing' : 'Intuitive' },
-                    { char: results.mbti[2], label: results.mbti[2] === 'T' ? 'Thinking' : 'Feeling' },
-                    { char: results.mbti[3], label: results.mbti[3] === 'J' ? 'Judging' : 'Perceiving' },
-                  ].map((dim, i) => (
-                    <div key={i} className="bg-warm p-3 border border-gold/5 text-center min-w-[100px]">
-                      <div className="text-navy text-2xl font-bold italic">{dim.char}</div>
-                      <div className="text-gold text-[7px] font-bold tracking-[1px] uppercase">{dim.label}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="col-span-2 text-grey text-[10px] italic">Dimensions not available</div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-12 border-t border-gold/10 pt-8">
-              {typeInfo ? (
-                <>
-                  <div className="space-y-6">
-                    <div>
-                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Key Strengths</h5>
-                      <ul className="space-y-2">
-                        {typeInfo.strengths?.map((s: string, i: number) => (
-                          <li key={i} className="flex gap-2 text-sm text-dark font-medium">
-                            <span className="text-gold">•</span> {s}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Professional Environment</h5>
-                      <p className="text-sm text-dark font-medium leading-relaxed italic">{typeInfo.workplace}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    <div>
-                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Potential Challenges</h5>
-                      <ul className="space-y-2">
-                        {typeInfo.challenges?.map((c: string, i: number) => (
-                          <li key={i} className="flex gap-2 text-sm text-dark font-medium">
-                            <span className="text-gold">•</span> {c}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Development Pathway</h5>
-                      <p className="text-sm text-dark font-medium leading-relaxed italic">{typeInfo.growth}</p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="col-span-2 text-center py-8 text-grey italic">
-                  Additional behavioral insights are only available for standard MBTI types.
+      <div className="grid gap-4">
+        {users.map((user) => (
+          <Card key={user.user_id} className="border border-slate-100 shadow-sm hover:shadow-md transition-shadow bg-white/80 backdrop-blur-sm">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center">
+                  <User className="w-6 h-6 text-slate-400" />
                 </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="mb-16 break-inside-avoid">
-          <h2 className="section-label">Section 2 • Big Five Clinical Data</h2>
-          <div className="overflow-x-auto">
-            {results?.bigFive ? (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-navy text-white font-sans text-[9px] tracking-[3px] uppercase">
-                    <th className="p-4 text-left">Trait</th>
-                    <th className="p-4 text-left">Score</th>
-                    <th className="p-4 text-left">Interpretation</th>
-                  </tr>
-                </thead>
-                <tbody className="font-sans text-sm">
-                  {[
-                    { trait: 'Openness', score: results?.bigFive?.openness || 0, desc: 'Intellectual curiosity and systems thinking' },
-                    { trait: 'Conscientiousness', score: results?.bigFive?.conscientiousness || 0, desc: 'Drive, self-discipline, and execution focus' },
-                    { trait: 'Extraversion', score: results?.bigFive?.extraversion || 0, desc: 'Social energy and outward orientation' },
-                    { trait: 'Agreeableness', score: results?.bigFive?.agreeableness || 0, desc: 'Focus on harmony vs independent principle' },
-                    { trait: 'Emotional Stability', score: results?.bigFive?.emotionalStability || 0, desc: 'Internal sensitivity and stress resilience' },
-                  ].map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-warm'}>
-                      <td className="p-4 font-bold text-navy antialiased">{row.trait}</td>
-                      <td className="p-4 text-gold font-bold antialiased">{row.score}th Percentile</td>
-                      <td className="p-4 text-dark font-semibold antialiased">{row.desc}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-center py-10 text-grey italic">Big Five data not available for this profile.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="mb-16 break-inside-avoid">
-          <h2 className="section-label">Section 3 • Emotional Intelligence</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {results?.ei ? (
-              [
-                { icon: <ShieldCheck />, label: 'Self-Awareness', score: results?.ei?.selfAwareness || 0 },
-                { icon: <Zap />, label: 'Self-Regulation', score: results?.ei?.selfRegulation || 0 },
-                { icon: <Brain />, label: 'Motivation', score: results?.ei?.motivation || 0 },
-                { icon: <Info />, label: 'Empathy', score: results?.ei?.empathy || 0 },
-                { icon: <FileText />, label: 'Social Skills', score: results?.ei?.socialSkills || 0 },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-4 bg-warm p-6 border-l-4 border-navy">
-                  <div className="text-gold">{item.icon}</div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-end mb-2">
-                      <span className="font-sans text-[10px] font-bold tracking-wider uppercase text-grey">{item.label}</span>
-                      <span className="font-sans text-xs font-bold text-navy">{item.score}%</span>
-                    </div>
-                    <div className="h-1 w-full bg-navy/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-navy" style={{ width: `${item.score}%` }} />
+                <div>
+                  <h3 className="font-bold text-lg">{user.user_id}</h3>
+                  <div className="flex flex-col gap-0.5">
+                    {user.email && (
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <Mail className="w-3 h-3" />
+                        <span>{user.email}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Coins className="w-3.5 h-3.5" />
+                      <span>{user.credits} Credits</span>
                     </div>
                   </div>
                 </div>
-              ))
-            ) : (
-              <p className="col-span-2 text-center py-10 text-grey italic">Emotional Intelligence data not available.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="bg-navy p-10 text-center">
-          <h4 className="font-sans text-[10px] font-bold tracking-[5px] text-gold uppercase mb-4">Profile Integrity</h4>
-          <p className="text-gold-lt italic text-lg max-w-2xl mx-auto font-medium">
-            "The consistency of results across three independent methodological approaches distinguishes this profile from a single-instrument result."
-          </p>
-        </section>
-      </main>
-
-      <Footer />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => addCredits(user.user_id, 10)} className="rounded-lg">
+                  +10
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => addCredits(user.user_id, 50)} className="rounded-lg">
+                  +50
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => addCredits(user.user_id, 100)} className="rounded-lg">
+                  +100
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

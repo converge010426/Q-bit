@@ -1,5 +1,5 @@
 {
-  "name": "CONVERGE™ Psychological Architecture",
-  "description": "Assessment platform with Supabase integration",
+  "name": "Q-bit",
+  "description": "Convert documents between Text and PDF to Text or JPEG formats instantly in your browser.",
   "requestFramePermissions": []
 }
